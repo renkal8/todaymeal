@@ -1,0 +1,6 @@
+{
+  "name": "Diet & Macro Tracker",
+  "description": "인바디 체성분 및 Katch-McArdle 피드백 기반 모바일 최적화 초개인화 다이어트 식단 기록 웹 어플리케이션",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

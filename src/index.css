@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  background-color: #F0F2F5;
+  font-family: var(--font-sans);
+}
+
+/* Slim scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 9999px;
+}
+
+/* Base Dark Mode Hacks for hardcoded colors */
+html.dark body {
+  background-color: #0f172a;
+}
+html.dark .bg-\[\#F8FAFC\], html.dark .bg-slate-50 { background-color: #0f172a !important; }
+html.dark .bg-\[\#EFF6FF\] { background-color: #1e3a8a !important; }
+html.dark .bg-white { background-color: #1e293b !important; }
+html.dark .text-\[\#1E293B\], html.dark .text-neutral-800, html.dark .text-slate-900 { color: #f8fafc !important; }
+html.dark .text-\[\#64748B\], html.dark .text-neutral-500 { color: #94a3b8 !important; }
+html.dark .border-\[\#E2E8F0\], html.dark .border-neutral-150, html.dark .border-neutral-200 { border-color: #334155 !important; }
+html.dark .border-\[\#DBEAFE\], html.dark .border-\[\#F1F5F9\] { border-color: #1e40af !important; }
+html.dark .bg-\[\#F1F5F9\] { background-color: #334155 !important; }
+html.dark .bg-neutral-50 { background-color: #0f172a !important; }
+

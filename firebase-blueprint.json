@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User personalization profile containing body metrics, TDEE, and macro targets",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique user id matching their Firebase Auth UID" },
+        "gender": { "type": "string", "enum": ["male", "female"], "description": "Biological sex" },
+        "age": { "type": "number", "description": "Age in years" },
+        "height": { "type": "number", "description": "Height in cm" },
+        "currentWeight": { "type": "number", "description": "Current body weight in kg" },
+        "targetWeight": { "type": "number", "description": "Target body weight in kg" },
+        "skeletalMuscleMass": { "type": "number", "description": "Skeletal Muscle Mass in kg" },
+        "bodyFatMass": { "type": "number", "description": "Body Fat Mass in kg" },
+        "bodyFatPercentage": { "type": "number", "description": "Body Fat Percentage" },
+        "activityLevel": { "type": "string", "enum": ["sedentary", "light", "moderate", "active", "very_active"], "description": "Activity level factor" },
+        "goalType": { "type": "string", "enum": ["cut", "maintain", "bulk"], "description": "Diet goals" },
+        "targetCalories": { "type": "number", "description": "Target TDEE calories calculated" },
+        "targetCarbs": { "type": "number", "description": "Target carb intake in grams" },
+        "targetProtein": { "type": "number", "description": "Target protein intake in grams" },
+        "targetFat": { "type": "number", "description": "Target fat intake in grams" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last time profile was synced or recalculated" }
+      },
+      "required": ["userId", "gender", "age", "height", "currentWeight", "targetWeight", "activityLevel", "goalType", "targetCalories", "targetCarbs", "targetProtein", "targetFat", "updatedAt"]
+    },
+    "HealthRecord": {
+      "title": "HealthRecord",
+      "description": "Historical log of weight and body composition for plotting progress",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique user id matching their Firebase Auth UID" },
+        "weight": { "type": "number", "description": "Body weight in kg" },
+        "skeletalMuscleMass": { "type": "number", "description": "Skeletal Muscle Mass in kg" },
+        "bodyFatMass": { "type": "number", "description": "Body Fat Mass in kg" },
+        "bodyFatPercentage": { "type": "number", "description": "Body Fat Percentage" },
+        "loggedAt": { "type": "string", "format": "date-time", "description": "The moment the record was added" }
+      },
+      "required": ["userId", "weight", "loggedAt"]
+    },
+    "FoodLog": {
+      "title": "FoodLog",
+      "description": "Log of a consumed food item",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner userId" },
+        "dateStr": { "type": "string", "description": "ISO date string YYYY-MM-DD" },
+        "name": { "type": "string", "description": "Name of the food item" },
+        "category": { "type": "string", "description": "Food category/icon reference" },
+        "grams": { "type": "number", "description": "Amount in grams" },
+        "calories": { "type": "number", "description": "Energy content in kcal" },
+        "carbs": { "type": "number", "description": "Carbohydrates in grams" },
+        "protein": { "type": "number", "description": "Protein in grams" },
+        "fat": { "type": "number", "description": "Fat in grams" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of creation" }
+      },
+      "required": ["userId", "dateStr", "name", "category", "grams", "calories", "carbs", "protein", "fat", "createdAt"]
+    },
+    "FastingLog": {
+      "title": "FastingLog",
+      "description": "Record of a fasting period",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner userId" },
+        "startTime": { "type": "string", "format": "date-time", "description": "Start of fast" },
+        "endTime": { "type": "string", "format": "date-time", "description": "End of fast, if complete" },
+        "targetDuration": { "type": "number", "description": "Target duration in hours" },
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "Fasting status" }
+      },
+      "required": ["userId", "startTime", "targetDuration", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile settings document"
+    },
+    "users/{userId}/records/{recordId}": {
+      "schema": { "$ref": "#/entities/HealthRecord" },
+      "description": "Chronological history of weight and body composition readings"
+    },
+    "users/{userId}/meals/{mealId}": {
+      "schema": { "$ref": "#/entities/FoodLog" },
+      "description": "Diet meals logged by user"
+    },
+    "users/{userId}/fasting/{fastingId}": {
+      "schema": { "$ref": "#/entities/FastingLog" },
+      "description": "Fasting timers and historical fasting logged by user"
+    }
+  }
+}

@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global safety net (default deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE HELPER FUNCTIONS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+    
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['userId', 'gender', 'age', 'height', 'currentWeight', 'targetWeight', 'activityLevel', 'goalType', 'targetCalories', 'targetCarbs', 'targetProtein', 'targetFat', 'updatedAt'])
+        && data.userId == request.auth.uid
+        && data.gender is string && (data.gender == 'male' || data.gender == 'female')
+        && data.age is number && data.age >= 1 && data.age <= 120
+        && data.height is number && data.height >= 50 && data.height <= 250
+        && data.currentWeight is number && data.currentWeight >= 20 && data.currentWeight <= 300
+        && data.targetWeight is number && data.targetWeight >= 20 && data.targetWeight <= 300
+        && data.activityLevel is string && (data.activityLevel == 'sedentary' || data.activityLevel == 'light' || data.activityLevel == 'moderate' || data.activityLevel == 'active' || data.activityLevel == 'very_active')
+        && data.goalType is string && (data.goalType == 'cut' || data.goalType == 'maintain' || data.goalType == 'bulk')
+        && data.targetCalories is number && data.targetCalories >= 500 && data.targetCalories <= 10000
+        && data.targetCarbs is number && data.targetCarbs >= 0 && data.targetCarbs <= 2000
+        && data.targetProtein is number && data.targetProtein >= 0 && data.targetProtein <= 1000
+        && data.targetFat is number && data.targetFat >= 0 && data.targetFat <= 500
+        && data.updatedAt is string
+        && (!data.keys().hasAny(['subProfileId']) || data.subProfileId is string)
+        && (!data.keys().hasAny(['displayName']) || data.displayName is string)
+        && (!data.keys().hasAny(['skeletalMuscleMass']) || data.skeletalMuscleMass is number)
+        && (!data.keys().hasAny(['bodyFatMass']) || data.bodyFatMass is number)
+        && (!data.keys().hasAny(['bodyFatPercentage']) || data.bodyFatPercentage is number);
+    }
+
+    function isValidHealthRecord(data) {
+      return data.keys().hasAll(['userId', 'weight', 'loggedAt'])
+        && data.userId == request.auth.uid
+        && data.weight is number && data.weight >= 20 && data.weight <= 300
+        && data.loggedAt is string
+        && (!data.keys().hasAny(['subProfileId']) || data.subProfileId is string)
+        && (!data.keys().hasAny(['skeletalMuscleMass']) || data.skeletalMuscleMass is number)
+        && (!data.keys().hasAny(['bodyFatMass']) || data.bodyFatMass is number)
+        && (!data.keys().hasAny(['bodyFatPercentage']) || data.bodyFatPercentage is number);
+    }
+
+    function isValidFoodLog(data) {
+      return data.keys().hasAll(['userId', 'dateStr', 'name', 'category', 'grams', 'calories', 'carbs', 'protein', 'fat', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.dateStr is string && data.dateStr.size() <= 20
+        && data.name is string && data.name.size() <= 100
+        && data.category is string && data.category.size() <= 50
+        && data.grams is number && data.grams >= 0
+        && data.calories is number && data.calories >= 0
+        && data.carbs is number && data.carbs >= 0
+        && data.protein is number && data.protein >= 0
+        && data.fat is number && data.fat >= 0
+        && data.createdAt is string
+        && (!data.keys().hasAny(['subProfileId']) || data.subProfileId is string)
+        && (!data.keys().hasAny(['mealTime']) || data.mealTime is string);
+    }
+
+    function isValidFastingLog(data) {
+      return data.keys().hasAll(['userId', 'startTime', 'targetDuration', 'status'])
+        && (data.keys().size() == 4 || (data.keys().size() == 5 && data.keys().hasAll(['endTime'])))
+        && data.userId == request.auth.uid
+        && data.startTime is string
+        && data.targetDuration is number && data.targetDuration >= 1 && data.targetDuration <= 168
+        && data.status is string && (data.status == 'active' || data.status == 'completed')
+        && (!data.keys().hasAny(['endTime']) || data.endTime is string);
+    }
+
+    // --- COLLECTION RULES MATCHES ---
+
+    // 1. User Profile Setup / Update
+    match /users/{userId} {
+      allow get, list, create, update, delete: if isOwner(userId);
+
+      // 2. Sub-collection: Health History Records
+      match /records/{recordId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+      }
+
+      // 3. Sub-collection: Logged nutritional meals
+      match /meals/{mealId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+      }
+
+      // 4. Sub-collection: Fasting sessions
+      match /fasting/{fastingId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+      }
+    }
+  }
+}
