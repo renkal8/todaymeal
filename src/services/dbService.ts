@@ -136,6 +136,16 @@ export const dbService = {
     }
   },
 
+  async updateHealthRecord(userId: string, recordId: string, data: Partial<HealthRecord>): Promise<void> {
+    const path = `users/${userId}/records/${recordId}`;
+    try {
+      const docRef = doc(db, 'users', userId, 'records', recordId);
+      await updateDoc(docRef, data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
   // --- DIET FOOD LOGS OPERATIONS ---
   async addFoodLog(userId: string, log: Omit<FoodLog, 'userId'>): Promise<void> {
     const path = `users/${userId}/meals`;
@@ -205,6 +215,16 @@ export const dbService = {
       await deleteDoc(docRef);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
+  async updateFoodLog(userId: string, mealId: string, data: Partial<FoodLog>): Promise<void> {
+    const path = `users/${userId}/meals/${mealId}`;
+    try {
+      const docRef = doc(db, 'users', userId, 'meals', mealId);
+      await updateDoc(docRef, data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
     }
   },
 

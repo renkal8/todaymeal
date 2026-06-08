@@ -19,6 +19,7 @@ import MealLogger from './components/MealLogger';
 import TrendChart from './components/TrendChart';
 import NumberAdjuster from './components/NumberAdjuster';
 import CopyMealsModal from './components/CopyMealsModal';
+import FastingTracker from './components/FastingTracker';
 
 // Lucide Icons
 import {
@@ -47,17 +48,31 @@ import {
   ArrowUp,
   ArrowDown,
   Menu,
-  ListRestart
+  ListRestart,
+  Edit2,
+  X,
+  Check
 } from 'lucide-react';
 
 import MealRoutineEditor from './components/MealRoutineEditor';
 
+interface MealGroupItemProps {
+  key?: string;
+  groupKey: string;
+  foodLogs: FoodLog[];
+  customName?: string;
+  onRename: (id: string, newName: string) => void;
+  onDelete: (id: string) => void;
+  handleDeleteFoodLog: (id: string) => Promise<void> | void;
+  onStartEditFoodLog?: (log: FoodLog) => void;
+  setActiveMealTime: (id: any) => void;
+}
+
 // Meal Group Component using Framer Motion Reorder explicitly to allow only snack dragging
 function MealGroupItem({ 
-  groupKey, foodLogs, handleDeleteFoodLog, setActiveMealTime 
-}: { 
-  groupKey: string, foodLogs: FoodLog[], handleDeleteFoodLog: (id: string) => void, setActiveMealTime: (id: any) => void 
-}) {
+  groupKey, foodLogs, customName, onRename, onDelete, handleDeleteFoodLog, onStartEditFoodLog, setActiveMealTime 
+}: MealGroupItemProps) {
+  const isCustom = !['breakfast', 'lunch', 'dinner', 'snack'].includes(groupKey);
   const getGroupInfo = (key: string) => {
     const defaultGroups: Record<string, { id: string, title: string, icon: string }> = {
       'breakfast': { id: 'breakfast', title: '아침 식사', icon: '☀️' },
@@ -66,9 +81,9 @@ function MealGroupItem({
       'snack': { id: 'snack', title: '간식', icon: '🍪' }
     };
     if (defaultGroups[key]) return defaultGroups[key];
-    if (key.startsWith('meal_')) return { id: key, title: `추가 식사 ${key.split('_')[1]}`, icon: '🍱' };
-    if (key.startsWith('snack_')) return { id: key, title: `추가 간식 ${key.split('_')[1]}`, icon: '🧁' };
-    return { id: key, title: '식사', icon: '🍽️' };
+    if (key.startsWith('meal_')) return { id: key, title: customName || `추가 식사 ${key.split('_')[1]}`, icon: '🍱' };
+    if (key.startsWith('snack_')) return { id: key, title: customName || `추가 간식 ${key.split('_')[1]}`, icon: '🧁' };
+    return { id: key, title: customName || '식사', icon: '🍽️' };
   };
 
   const group = getGroupInfo(groupKey);
@@ -85,19 +100,37 @@ function MealGroupItem({
       id={groupKey}
       dragListener={false}
       dragControls={controls}
-      className={`bg-white border ${isSnack ? 'border-[#3B82F6] z-10' : 'border-[#E2E8F0]'} rounded-[20px] shadow-xs overflow-hidden`}
+      className={`bg-white dark:bg-slate-900 border ${isSnack ? 'border-[#3B82F6] z-10' : 'border-[#E2E8F0] dark:border-slate-800'} rounded-[20px] shadow-xs overflow-hidden`}
     >
-      <div className={`flex justify-between items-center p-3.5 bg-[#F8FAFC] border-b ${isSnack ? 'border-[#DBEAFE]' : 'border-[#F1F5F9]'}`}>
+      <div className={`flex justify-between items-center p-3.5 bg-[#F8FAFC] dark:bg-slate-800/50 border-b ${isSnack ? 'border-[#DBEAFE] dark:border-slate-700' : 'border-[#F1F5F9] dark:border-slate-800'}`}>
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center text-lg w-8 h-8 bg-white shadow-sm rounded-lg border border-[#E2E8F0]">
+          <div className="flex items-center justify-center text-lg w-8 h-8 bg-white dark:bg-slate-800 shadow-sm rounded-lg border border-[#E2E8F0] dark:border-slate-700">
              {group.icon}
           </div>
-          <span className="text-sm font-black text-[#1E293B] ml-1">{group.title}</span>
+          {isCustom ? (
+            <input 
+              type="text" 
+              value={group.title}
+              onChange={(e) => onRename(groupKey, e.target.value)}
+              className="text-sm font-black text-[#1E293B] dark:text-white bg-transparent border-none outline-none w-24 focus:border-b focus:border-blue-500" 
+            />
+          ) : (
+            <span className="text-sm font-black text-[#1E293B] dark:text-white ml-1">{group.title}</span>
+          )}
           {groupCals > 0 && <span className="text-xs font-extrabold text-[#3B82F6] font-mono ml-1">{groupCals} kcal</span>}
         </div>
         
         <div className="flex items-center gap-1">
-          {isSnack && (
+          {isCustom && (
+            <button 
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onDelete(groupKey)} 
+              className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded cursor-pointer transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          {(isSnack || isCustom) && (
              <div 
                className="cursor-grab active:cursor-grabbing p-1 text-[#3B82F6] hover:text-blue-700 rounded touch-none" 
                onPointerDown={(e) => controls.start(e)}
@@ -107,7 +140,7 @@ function MealGroupItem({
           )}
           <button
             onClick={() => setActiveMealTime(group.id as any)}
-            className="w-8 h-8 flex items-center justify-center bg-white border border-[#E2E8F0] rounded-full text-[#3B82F6] hover:bg-[#EFF6FF] cursor-pointer shadow-sm active:scale-95 transition-all"
+            className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 rounded-full text-[#3B82F6] hover:bg-[#EFF6FF] dark:hover:bg-slate-700 cursor-pointer shadow-sm active:scale-95 transition-all ml-1"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -116,33 +149,66 @@ function MealGroupItem({
       
       <div className="p-2 flex flex-col gap-1.5">
         {groupLogs.length === 0 ? (
-          <div className="flex items-center justify-center py-4 px-2">
-            <p className="text-xs text-[#94A3B8] font-medium">아직 등록된 음식이 없어요.</p>
+          <div 
+            onClick={() => setActiveMealTime(group.id as any)}
+            className="flex flex-col items-center justify-center py-5 px-4 bg-slate-50/50 dark:bg-slate-800/10 rounded-xl border border-dashed border-[#E2E8F0] dark:border-slate-800 hover:border-[#3B82F6] hover:bg-[#F8FAFC] dark:hover:bg-slate-800/30 cursor-pointer transition-all duration-200"
+          >
+            <p className="text-xs text-[#94A3B8] font-bold">아직 등록된 음식이 없어요.</p>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveMealTime(group.id as any);
+              }}
+              className="mt-2.5 px-3.5 py-1.5 bg-white dark:bg-slate-700 text-[#3B82F6] border border-[#E2E8F0] dark:border-slate-600 rounded-xl text-xs font-black shadow-2xs hover:bg-[#EFF6FF] dark:hover:bg-slate-600 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              음식 추가하기
+            </button>
           </div>
         ) : (
-          groupLogs.map(log => (
-            <div key={log.id} className="flex justify-between items-center bg-white border border-[#F1F5F9] rounded-xl p-3 shadow-xs hover:border-[#E2E8F0] transition-colors">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-extrabold text-[#1E293B] truncate pr-2">{log.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10.5px] font-mono font-bold text-[#64748B]">{log.grams}g</span>
-                  <span className="w-1 h-1 rounded-full bg-[#CBD5E1]" />
-                  <span className="text-[10.5px] font-mono font-black text-[#1E293B]">{log.calories} kcal</span>
+          <>
+            {groupLogs.map(log => (
+              <div key={log.id} className="flex justify-between items-center bg-white dark:bg-slate-900 border border-[#F1F5F9] dark:border-slate-800/50 rounded-xl p-3 shadow-xs hover:border-[#E2E8F0] dark:hover:border-slate-700 transition-colors">
+                <div className="min-w-0 flex-1 flex items-start gap-2">
+                  <span className="text-base select-none mt-0.5">{log.icon || '✨'}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-extrabold text-[#1E293B] dark:text-neutral-200 truncate pr-2">{log.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10.5px] font-mono font-bold text-[#64748B] dark:text-slate-400">{log.grams}g</span>
+                      <span className="w-1 h-1 rounded-full bg-[#CBD5E1] dark:bg-slate-700" />
+                      <span className="text-[10.5px] font-mono font-black text-[#1E293B] dark:text-white">{log.calories} kcal</span>
+                    </div>
+                    <div className="flex gap-2.5 text-[9px] font-mono font-bold text-[#94A3B8] dark:text-slate-400 mt-1.5">
+                      <span>탄 <span className="text-[#3B82F6]">{Math.round(log.carbs)}g</span></span>
+                      <span>단 <span className="text-[#10B981]">{Math.round(log.protein)}g</span></span>
+                      <span>지 <span className="text-[#F43F5E]">{Math.round(log.fat)}g</span></span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2.5 text-[9px] font-mono font-bold text-[#94A3B8] mt-1.5">
-                  <span>탄 <span className="text-[#3B82F6]">{log.carbs}g</span></span>
-                  <span>단 <span className="text-[#10B981]">{log.protein}g</span></span>
-                  <span>지 <span className="text-[#F43F5E]">{log.fat}g</span></span>
+                <div className="flex gap-1 items-center flex-shrink-0 ml-2">
+                  <button
+                    onClick={() => onStartEditFoodLog && onStartEditFoodLog(log)}
+                    className="p-2 text-[#94A3B8] hover:text-[#3B82F6] rounded-xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteFoodLog(log.id!)}
+                    className="p-2 text-[#94A3B8] hover:text-rose-500 rounded-xl cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => handleDeleteFoodLog(log.id!)}
-                className="p-2.5 text-[#94A3B8] hover:text-rose-500 rounded-xl cursor-pointer hover:bg-rose-50 transition-colors ml-2"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))
+            ))}
+            <button
+              onClick={() => setActiveMealTime(group.id as any)}
+              className="mt-1 h-10 w-full border border-dashed border-[#E2E8F0] dark:border-slate-700 text-neutral-500 dark:text-slate-400 hover:text-[#3B82F6] hover:border-[#3B82F6] dark:hover:text-[#3B82F6] rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98"
+            >
+              <Plus className="w-4 h-4 text-[#3B82F6]" />
+              <span>음식 더 추가하기</span>
+            </button>
+          </>
         )}
       </div>
     </Reorder.Item>
@@ -172,12 +238,17 @@ export default function App() {
   );
   
   const [isCopyModalOpen, setIsCopyModalOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'composition' | 'profile' | 'routine'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'composition' | 'profile' | 'routine' | 'fasting'>('dashboard');
 
   const [mealOrder, setMealOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('mealOrder');
     if (saved) return JSON.parse(saved);
     return ['breakfast', 'lunch', 'dinner', 'snack'];
+  });
+  const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('customNames');
+    if (saved) return JSON.parse(saved);
+    return {};
   });
   const [isReorderingMeals, setIsReorderingMeals] = useState<boolean>(false);
 
@@ -195,13 +266,24 @@ export default function App() {
   // Interactive Adding Forms
   const [uiLoading, setUiLoading] = useState<boolean>(false);
   const [isAddingComp, setIsAddingComp] = useState<boolean>(false);
+  const [editingCompId, setEditingCompId] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   const [activeMealTime, setActiveMealTime] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack' | null>(null);
+
+  // States for food log editing modal
+  const [editingFoodLog, setEditingFoodLog] = useState<FoodLog | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [editGrams, setEditGrams] = useState<number>(100);
+  const [editCalories, setEditCalories] = useState<number>(0);
+  const [editCarbs, setEditCarbs] = useState<number>(0);
+  const [editProtein, setEditProtein] = useState<number>(0);
+  const [editFat, setEditFat] = useState<number>(0);
 
   // Quick state for body comp manual adjusts
   const [compWeight, setCompWeight] = useState<number>(64.5);
   const [compMuscle, setCompMuscle] = useState<number>(24.0);
   const [compFatPct, setCompFatPct] = useState<number>(28.0);
+  const [compDate, setCompDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
   // Dark Mode Toggle Effect
@@ -262,6 +344,45 @@ export default function App() {
           setCompWeight(prof.currentWeight);
           setCompMuscle(prof.skeletalMuscleMass || 24.0);
           setCompFatPct(prof.bodyFatPercentage || 28.0);
+        }
+
+        // Auto Weekly Calibration Check
+        if (prof.weeklyUpdateEnabled && prof.weeklyUpdateDay !== undefined) {
+          const now = new Date();
+          // if today is the designated update day AND the last update was more than 1 day ago (to prevent infinite loops or double updates today)
+          const lastUpdate = new Date(prof.updatedAt);
+          const timeSinceUpdate = now.getTime() - lastUpdate.getTime();
+          if (now.getDay() === prof.weeklyUpdateDay && timeSinceUpdate > 24 * 60 * 60 * 1000) {
+            // We need to run calibration.
+            const feedback = generateWeeklyFeedback(prof, recs);
+            if (feedback && feedback.recommendedCalories !== prof.targetCalories) {
+               // Fire and forget update
+               dbService.saveUserProfile(uid, {
+                 ...prof,
+                 targetCalories: feedback.recommendedCalories,
+                 targetCarbs: feedback.recommendedCarbs,
+                 targetProtein: feedback.recommendedProtein,
+                 targetFat: feedback.recommendedFat,
+                 updatedAt: now.toISOString()
+               }).then(() => {
+                 setProfile(prev => prev ? {
+                   ...prev,
+                   targetCalories: feedback.recommendedCalories,
+                   targetCarbs: feedback.recommendedCarbs,
+                   targetProtein: feedback.recommendedProtein,
+                   targetFat: feedback.recommendedFat,
+                   updatedAt: now.toISOString()
+                 } : prev);
+                 alert('주간 자동 칼로리 갱신이 완료되었습니다. (목표 칼로리가 변경되었습니다)');
+               }).catch(console.error);
+            } else if (feedback) {
+               // Update the timestamp so it doesn't try again today
+               dbService.saveUserProfile(uid, {
+                 ...prof,
+                 updatedAt: now.toISOString()
+               }).catch(console.error);
+            }
+          }
         }
       }
     } catch (err) {
@@ -355,7 +476,7 @@ export default function App() {
         skeletalMuscleMass: compMuscle > 0 ? compMuscle : undefined,
         bodyFatPercentage: compFatPct > 0 ? compFatPct : undefined,
         bodyFatMass: compFatPct > 0 ? bfm : undefined,
-        loggedAt: new Date().toISOString()
+        loggedAt: new Date(compDate).toISOString()
       });
 
       // Update current profile weight synchronously as well
@@ -371,11 +492,61 @@ export default function App() {
 
       await loadUserData(user.uid);
       setIsAddingComp(false);
+      setEditingCompId(null);
     } catch (err) {
       console.error(err);
     } finally {
       setUiLoading(false);
     }
+  };
+
+  const handleUpdateHealthRecord = async () => {
+    if (!user || !editingCompId) return;
+    setUiLoading(true);
+    try {
+      const bfm = (compWeight * compFatPct) / 100;
+      await dbService.updateHealthRecord(user.uid, editingCompId, {
+        weight: compWeight,
+        skeletalMuscleMass: compMuscle > 0 ? compMuscle : undefined,
+        bodyFatPercentage: compFatPct > 0 ? compFatPct : undefined,
+        bodyFatMass: compFatPct > 0 ? bfm : undefined,
+        loggedAt: new Date(compDate).toISOString()
+      });
+
+      // Update current profile weight synchronously as well
+      if (profile) {
+        await dbService.saveUserProfile(user.uid, {
+          ...profile,
+          currentWeight: compWeight,
+          skeletalMuscleMass: compMuscle > 0 ? compMuscle : profile.skeletalMuscleMass,
+          bodyFatPercentage: compFatPct > 0 ? compFatPct : profile.bodyFatPercentage,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      await loadUserData(user.uid);
+      setIsAddingComp(false);
+      setEditingCompId(null);
+    } catch (err) {
+      console.error(err);
+      alert('수정 중 오류가 발생했습니다.');
+    } finally {
+      setUiLoading(false);
+    }
+  };
+
+  const handleEditRecord = (rec: HealthRecord) => {
+    setEditingCompId(rec.id!);
+    setCompWeight(rec.weight);
+    setCompMuscle(rec.skeletalMuscleMass || 24);
+    setCompFatPct(rec.bodyFatPercentage || 28);
+    const d = new Date(rec.loggedAt);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setCompDate(`${yyyy}-${mm}-${dd}`);
+    setIsAddingComp(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteRecord = async (recId: string) => {
@@ -399,6 +570,7 @@ export default function App() {
           mealTime: routine.mealTime,
           name: food.name,
           category: 'custom',
+          icon: food.icon || '✨',
           grams: food.grams,
           calories: food.calories,
           carbs: food.carbs,
@@ -473,6 +645,38 @@ export default function App() {
       setFastingLogs(listF);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleStartEditFoodLog = (log: FoodLog) => {
+    setEditingFoodLog(log);
+    setEditName(log.name);
+    setEditGrams(log.grams);
+    setEditCalories(log.calories);
+    setEditCarbs(log.carbs);
+    setEditProtein(log.protein);
+    setEditFat(log.fat);
+  };
+
+  const handleSaveEditFoodLog = async () => {
+    if (!user || !editingFoodLog || !editingFoodLog.id) return;
+    setUiLoading(true);
+    try {
+      await dbService.updateFoodLog(user.uid, editingFoodLog.id, {
+        name: editName,
+        grams: editGrams,
+        calories: editCalories,
+        carbs: editCarbs,
+        protein: editProtein,
+        fat: editFat
+      });
+      await loadDayFoods();
+      setEditingFoodLog(null);
+    } catch (err) {
+      console.error(err);
+      alert('식품 기록 수정 중 오류가 발생했습니다.');
+    } finally {
+      setUiLoading(false);
     }
   };
 
@@ -686,7 +890,7 @@ export default function App() {
                     className="flex items-center gap-1.5 text-[#1E293B] font-extrabold text-xs px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
                   >
                     <Calendar className="w-4 h-4 text-[#3B82F6]" />
-                    <span>{selectedDate === new Date().toISOString().split('T')[0] ? '오늘' : selectedDate}의 기록</span>
+                    <span>{selectedDate === new Date().toISOString().split('T')[0] ? `오늘 (${selectedDate})` : selectedDate}</span>
                   </button>
                   
                   {isCalendarOpen && (
@@ -784,7 +988,7 @@ export default function App() {
                     <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-2.5 text-center">
                       <span className="text-[10px] text-[#64748B] font-bold">탄수화물</span>
                       <p className="text-xs font-extrabold text-[#1E293B] font-mono mt-1">
-                        {totalCarbsLogged}g / {profile.targetCarbs}g
+                        {Math.round(totalCarbsLogged)}g / {profile.targetCarbs}g
                       </p>
                       <div className="w-full bg-[#E2E8F0] rounded-full h-1.5 mt-1.5">
                         <div
@@ -798,7 +1002,7 @@ export default function App() {
                     <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-2.5 text-center">
                       <span className="text-[10px] text-[#64748B] font-bold">단백질</span>
                       <p className="text-xs font-extrabold text-[#1E293B] font-mono mt-1">
-                        {totalProteinLogged}g / {profile.targetProtein}g
+                        {Math.round(totalProteinLogged)}g / {profile.targetProtein}g
                       </p>
                       <div className="w-full bg-[#E2E8F0] rounded-full h-1.5 mt-1.5">
                         <div
@@ -812,7 +1016,7 @@ export default function App() {
                     <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-2.5 text-center">
                       <span className="text-[10px] text-[#64748B] font-bold">지방</span>
                       <p className="text-xs font-extrabold text-[#1E293B] font-mono mt-1">
-                        {totalFatLogged}g / {profile.targetFat}g
+                        {Math.round(totalFatLogged)}g / {profile.targetFat}g
                       </p>
                       <div className="w-full bg-[#E2E8F0] rounded-full h-1.5 mt-1.5">
                         <div
@@ -844,6 +1048,8 @@ export default function App() {
                       onAddLog={handleAddFoodLog} 
                       dateStr={selectedDate} 
                       onOpenCopyModal={() => setIsCopyModalOpen(true)}
+                      onApplyRoutine={handleApplyRoutine}
+                      activeMealTime={activeMealTime}
                     />
                     {isCopyModalOpen && (
                       <CopyMealsModal
@@ -853,7 +1059,7 @@ export default function App() {
                         onCopy={async (foodsToCopy) => {
                           try {
                             const addPromises = foodsToCopy.map(log => 
-                              dbService.addFoodLog(user.uid, { ...log, mealTime: activeMealTime || log.mealTime })
+                              dbService.addFoodLog(user.uid, { ...log, mealTime: activeMealTime || log.mealTime, createdAt: new Date().toISOString() })
                             );
                             await Promise.all(addPromises);
                             await loadDayFoods();
@@ -882,47 +1088,67 @@ export default function App() {
                                   key={groupKey} 
                                   groupKey={groupKey} 
                                   foodLogs={foodLogs} 
+                                  customName={customNames[groupKey]}
+                                  onRename={(id, newName) => {
+                                    const newNames = { ...customNames, [id]: newName };
+                                    setCustomNames(newNames);
+                                    localStorage.setItem('customNames', JSON.stringify(newNames));
+                                  }}
+                                  onDelete={(id) => {
+                                    const newOrder = mealOrder.filter(k => k !== id);
+                                    setMealOrder(newOrder);
+                                    localStorage.setItem('mealOrder', JSON.stringify(newOrder));
+                                    const newNames = { ...customNames };
+                                    delete newNames[id];
+                                    setCustomNames(newNames);
+                                    localStorage.setItem('customNames', JSON.stringify(newNames));
+                                  }}
                                   handleDeleteFoodLog={handleDeleteFoodLog} 
                                   setActiveMealTime={setActiveMealTime} 
-                               />;
+                                  onStartEditFoodLog={handleStartEditFoodLog}
+                                />;
                       })}
                     </Reorder.Group>
                   </>
                 )}
               </div>
               
-              <div className="flex gap-2 mt-4 px-1">
-                <button 
-                  onClick={() => {
-                    const nextMealIdx = mealOrder.filter(k => k.startsWith('meal_')).length + 1;
-                    const newKey = 'meal_' + nextMealIdx;
-                    const newOrder = [...mealOrder, newKey];
-                    setMealOrder(newOrder);
-                    localStorage.setItem('mealOrder', JSON.stringify(newOrder));
-                  }} 
-                  className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-[#3B82F6]"
-                >
-                  <Plus className="w-4 h-4 text-[#3B82F6]" /> <span className="text-[#1E293B] dark:text-white">식사 추가하기</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    const nextSnackIdx = mealOrder.filter(k => k.startsWith('snack_')).length + 1;
-                    const newKey = 'snack_' + nextSnackIdx;
-                    const newOrder = [...mealOrder, newKey];
-                    setMealOrder(newOrder);
-                    localStorage.setItem('mealOrder', JSON.stringify(newOrder));
-                  }} 
-                  className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
-                >
-                  <Plus className="w-4 h-4 text-pink-500" /> <span>간식 추가하기</span>
-                </button>
-              </div>
+              {!activeMealTime && (
+                <>
+                  <div className="flex gap-2 mt-4 px-1">
+                    <button 
+                      onClick={() => {
+                        const nextMealIdx = mealOrder.filter(k => k.startsWith('meal_')).length + 1;
+                        const newKey = 'meal_' + nextMealIdx;
+                        const newOrder = [...mealOrder, newKey];
+                        setMealOrder(newOrder);
+                        localStorage.setItem('mealOrder', JSON.stringify(newOrder));
+                      }} 
+                      className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-[#3B82F6]"
+                    >
+                      <Plus className="w-4 h-4 text-[#3B82F6]" /> <span className="text-[#1E293B] dark:text-white">식사 추가하기</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const nextSnackIdx = mealOrder.filter(k => k.startsWith('snack_')).length + 1;
+                        const newKey = 'snack_' + nextSnackIdx;
+                        const newOrder = [...mealOrder, newKey];
+                        setMealOrder(newOrder);
+                        localStorage.setItem('mealOrder', JSON.stringify(newOrder));
+                      }} 
+                      className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                    >
+                      <Plus className="w-4 h-4 text-pink-500" /> <span>간식 추가하기</span>
+                    </button>
+                  </div>
 
-              {/* Line Trend Chart Metrics */}
-              {profile && (
-                <div className="mt-2">
-                  <TrendChart records={records} targetWeight={profile.targetWeight} />
-                </div>
+                  {/* Line Trend Chart Metrics */}
+                  {profile && (
+                    <div className="mt-2">
+                      <TrendChart records={records} targetWeight={profile.targetWeight} />
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -939,14 +1165,16 @@ export default function App() {
                   className="w-full flex items-center justify-center gap-1 bg-slate-900 text-white h-11 text-xs font-bold rounded-xl shadow-xs cursor-pointer active:scale-98 transition-all hover:bg-slate-800"
                   id="btn-open-bodycomp-form"
                 >
-                  <Plus className="w-4 h-4 text-[#3B82F6]" /> 오늘 체성분 (인바디) 등록하기
+                  <Plus className="w-4 h-4 text-[#3B82F6]" /> 체성분 (인바디) 등록하기
                 </button>
               ) : (
                 <div className="bg-white border border-neutral-150 rounded-2xl p-4 shadow-xs flex flex-col gap-4">
                   <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
-                    <span className="text-xs font-extrabold text-neutral-800">체성분 신규 등록</span>
+                    <span className="text-xs font-extrabold text-neutral-800">
+                      {editingCompId ? '체성분 기록 수정' : '체성분 신규 등록'}
+                    </span>
                     <button
-                      onClick={() => setIsAddingComp(false)}
+                      onClick={() => { setIsAddingComp(false); setEditingCompId(null); }}
                       className="text-neutral-400 hover:text-neutral-600 text-xs font-semibold cursor-pointer"
                     >
                       취소
@@ -954,6 +1182,16 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-neutral-700">측정 일자</label>
+                      <input 
+                        type="date" 
+                        value={compDate} 
+                        onChange={(e) => setCompDate(e.target.value)} 
+                        className="w-full text-xs h-10 border border-neutral-200 rounded-xl px-3 outline-none focus:border-[#3B82F6] transition-colors"
+                      />
+                    </div>
+                    
                     <NumberAdjuster
                       value={compWeight}
                       onChange={setCompWeight}
@@ -983,14 +1221,19 @@ export default function App() {
                       max={60}
                       stepDecimal={1}
                     />
+                    
+                    <p className="text-[10px] text-emerald-600 bg-emerald-50 p-2 rounded-lg leading-4">
+                      💡 <strong>안내:</strong> 인바디 등록 후 일주일간은 체성분이 크게 변하지 않으므로 잦은 변경을 권장하지 않습니다. 
+                      <br/>* 체성분을 등록해도 <strong>1일 목표 칼로리</strong>는 바로 변경되지 않으며, 프로필 [주간 자동 칼로리 갱신] 설정에 따라 지정된 요일에 갱신됩니다.
+                    </p>
 
                     <button
-                      onClick={handleAddHealthRecord}
+                      onClick={editingCompId ? handleUpdateHealthRecord : handleAddHealthRecord}
                       disabled={uiLoading}
                       className="w-full h-11 bg-slate-900 text-white text-xs font-extrabold rounded-xl hover:bg-slate-800 transition-all active:scale-98 cursor-pointer shadow-sm"
                       id="submit-bodycomp-btn"
                     >
-                      체성분 등록 및 가이드 갱신
+                      {editingCompId ? '수정 사항 저장' : '체성분 등록'}
                     </button>
                   </div>
                 </div>
@@ -1014,7 +1257,7 @@ export default function App() {
                       >
                         <div>
                           <p className="text-neutral-800 font-extrabold text-xs">
-                            {d.toLocaleDateString()} {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {d.toLocaleDateString()}
                           </p>
                           <div className="flex gap-3 text-[10.5px] mt-1 font-mono text-neutral-600 font-medium">
                             <span>체중: <strong className="text-neutral-800">{rec.weight}kg</strong></span>
@@ -1022,13 +1265,22 @@ export default function App() {
                             {rec.bodyFatPercentage && <span>지방률: <strong className="text-neutral-800">{rec.bodyFatPercentage}%</strong></span>}
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteRecord(rec.id!)}
-                          className="p-1.5 text-neutral-300 hover:text-rose-500 rounded-lg cursor-pointer"
-                          id={`btn-del-record-${rec.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => handleEditRecord(rec)}
+                            className="p-1.5 text-neutral-300 hover:text-blue-500 rounded-lg cursor-pointer"
+                            id={`btn-edit-record-${rec.id}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRecord(rec.id!)}
+                            className="p-1.5 text-neutral-300 hover:text-rose-500 rounded-lg cursor-pointer"
+                            id={`btn-del-record-${rec.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })
@@ -1040,6 +1292,11 @@ export default function App() {
           {/* TAB 5: ROUTINES */}
           {activeTab === 'routine' && (
             <MealRoutineEditor onApplyRoutine={handleApplyRoutine} />
+          )}
+
+          {/* TAB 6: FASTING TRACKER */}
+          {activeTab === 'fasting' && (
+            <FastingTracker />
           )}
 
           {/* TAB 4: MY PROFILE / SETTINGS */}
@@ -1109,7 +1366,7 @@ export default function App() {
                     className="w-full h-10 bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-neutral-300 rounded-xl text-xs font-bold font-sans hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                     id="btn-add-profile-action"
                   >
-                    <Plus className="w-4 h-4" /> 다른 사람 프로필 추가
+                    <Plus className="w-4 h-4" /> 프로필 추가
                   </button>
                 </div>
               </div>
@@ -1165,6 +1422,16 @@ export default function App() {
             <span className="text-[10px]">루틴저장</span>
           </button>
           <button
+            onClick={() => { setActiveTab('fasting'); setIsEditingProfile(false); setActiveMealTime(null); }}
+            className={`flex flex-col items-center justify-center flex-grow py-1 transition-all h-full cursor-pointer ${
+              activeTab === 'fasting' ? 'text-[#3B82F6] font-bold' : 'text-neutral-400 hover:text-white'
+            }`}
+            id="nav-tab-fasting"
+          >
+            <Timer className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">단식타이머</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('profile'); }}
             className={`flex flex-col items-center justify-center flex-grow py-1 transition-all h-full cursor-pointer ${
               activeTab === 'profile' ? 'text-[#3B82F6] font-bold' : 'text-neutral-400 hover:text-white'
@@ -1175,6 +1442,97 @@ export default function App() {
             <span className="text-[10px]">마이프로필</span>
           </button>
         </nav>
+
+        {/* Edit Food Log Modal */}
+        {editingFoodLog && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-800 border border-neutral-200 dark:border-slate-700 w-full max-w-md rounded-[28px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+              <div className="p-5 border-b border-neutral-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{editingFoodLog.icon || '✨'}</span>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-[#1E293B] dark:text-white">음식 정보 수정</h3>
+                    <p className="text-[10px] text-neutral-500">{editingFoodLog.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEditingFoodLog(null)}
+                  className="p-1.5 hover:bg-neutral-200 dark:hover:bg-slate-700 text-neutral-400 hover:text-neutral-600 rounded-full cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10.5px] font-black text-[#64748B] dark:text-slate-400">음식명</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full h-11 border border-neutral-200 dark:border-slate-700 bg-neutral-50 dark:bg-slate-900 rounded-xl px-3 text-xs font-black focus:outline-none focus:border-[#3B82F6] dark:text-white"
+                  />
+                </div>
+
+                {/* Macro Adjustment Math sliders/counters */}
+                <div className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-neutral-100 dark:border-slate-700/30 flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] font-extrabold text-[#1E293B] dark:text-slate-300">섭취 중량 (g)</span>
+                    <NumberAdjuster value={editGrams} onChange={(val) => {
+                      const oldGrams = editingFoodLog.grams || 100;
+                      const newGrams = Math.max(1, val);
+                      const ratio = newGrams / oldGrams;
+                      setEditGrams(newGrams);
+                      setEditCalories(Math.max(0, Math.round(editingFoodLog.calories * ratio)));
+                      setEditCarbs(Math.max(0, Math.round(editingFoodLog.carbs * ratio * 10) / 10));
+                      setEditProtein(Math.max(0, Math.round(editingFoodLog.protein * ratio * 10) / 10));
+                      setEditFat(Math.max(0, Math.round(editingFoodLog.fat * ratio * 10) / 10));
+                    }} min={1} stepDecimal={0} unit="g" />
+                  </div>
+
+                  <div className="h-px bg-neutral-200/50 dark:bg-slate-800" />
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] font-extrabold text-[#1E293B] dark:text-slate-300">칼로리 (kcal)</span>
+                    <NumberAdjuster value={editCalories} onChange={(val) => setEditCalories(Math.max(0, val))} min={0} stepDecimal={0} unit="kcal" />
+                  </div>
+
+                  <div className="h-px bg-neutral-200/50 dark:bg-slate-800" />
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col gap-1 items-center bg-white dark:bg-slate-800/40 p-2 rounded-xl border border-neutral-100 dark:border-slate-700/50">
+                      <span className="text-[9px] font-black text-[#3B82F6]">탄수화물(g)</span>
+                      <NumberAdjuster value={editCarbs} onChange={(val) => setEditCarbs(Math.max(0, val))} min={0} stepDecimal={0} unit="g" />
+                    </div>
+                    <div className="flex flex-col gap-1 items-center bg-white dark:bg-slate-800/40 p-2 rounded-xl border border-neutral-100 dark:border-slate-700/50">
+                      <span className="text-[9px] font-black text-[#10B981]">단백질(g)</span>
+                      <NumberAdjuster value={editProtein} onChange={(val) => setEditProtein(Math.max(0, val))} min={0} stepDecimal={0} unit="g" />
+                    </div>
+                    <div className="flex flex-col gap-1 items-center bg-white dark:bg-slate-800/40 p-2 rounded-xl border border-neutral-100 dark:border-slate-700/50">
+                      <span className="text-[9px] font-black text-[#F43F5E]">지방(g)</span>
+                      <NumberAdjuster value={editFat} onChange={(val) => setEditFat(Math.max(0, val))} min={0} stepDecimal={0} unit="g" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 border-t border-neutral-100 dark:border-slate-700/50 flex gap-2">
+                <button
+                  onClick={() => setEditingFoodLog(null)}
+                  className="flex-1 h-11 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-neutral-600 dark:text-neutral-200 text-xs font-black rounded-xl transition-all cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSaveEditFoodLog}
+                  className="flex-1 h-11 bg-[#3B82F6] hover:bg-blue-600 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" /> 저장 완료
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

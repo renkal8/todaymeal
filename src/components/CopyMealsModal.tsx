@@ -25,7 +25,7 @@ export default function CopyMealsModal({ userId, currentDate, onCopy, onClose }:
     async function load() {
       setLoading(true);
       try {
-        const data = await dbService.getDayFoodLogs(userId, sourceDate);
+        const data = await dbService.getFoodLogs(userId, sourceDate);
         setLogs(data);
         // Clear selection when date changes
         setSelectedLogs(new Set());
@@ -59,6 +59,7 @@ export default function CopyMealsModal({ userId, currentDate, onCopy, onClose }:
     const toCopy = selected.map(log => ({
       name: log.name,
       category: log.category,
+      icon: log.icon || '✨',
       grams: log.grams,
       calories: log.calories,
       carbs: log.carbs,

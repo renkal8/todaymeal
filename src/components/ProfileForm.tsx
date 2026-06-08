@@ -33,6 +33,7 @@ export default function ProfileForm({
   const [bodyFatPercentage, setBodyFatPercentage] = useState<number>(initialProfile?.bodyFatPercentage || 28.0);
   const [activityLevel, setActivityLevel] = useState<UserProfile['activityLevel']>(initialProfile?.activityLevel || 'light');
   const [goalType, setGoalType] = useState<UserProfile['goalType']>(initialProfile?.goalType || 'cut');
+  const [weeklyWeightLossTarget, setWeeklyWeightLossTarget] = useState<number>(initialProfile?.weeklyWeightLossTarget ?? 500);
 
   // Manual Macro & Calorie Tracking
   const [manualMode, setManualMode] = useState<boolean>(false);
@@ -40,6 +41,9 @@ export default function ProfileForm({
   const [liveCarbs, setLiveCarbs] = useState<number>(initialProfile?.targetCarbs || 200);
   const [liveProtein, setLiveProtein] = useState<number>(initialProfile?.targetProtein || 150);
   const [liveFat, setLiveFat] = useState<number>(initialProfile?.targetFat || 50);
+
+  const [weeklyUpdateEnabled, setWeeklyUpdateEnabled] = useState<boolean>(initialProfile?.weeklyUpdateEnabled ?? true);
+  const [weeklyUpdateDay, setWeeklyUpdateDay] = useState<number>(initialProfile?.weeklyUpdateDay ?? 0); // 0 = Sunday
 
   // Recalculate auto-values whenever core stats change
   useEffect(() => {
@@ -61,7 +65,10 @@ export default function ProfileForm({
     // 3. Calorie Target by Goal
     let targetCalories = tdee;
     if (goalType === 'cut') {
-      targetCalories = tdee - 500;
+      // Calorie deficit per day: body fat contains ~7700 kcal per 1kg.
+      // Deficit per day = (weekly target in grams * 7.7) / 7 days = target * 1.1 kcal / day!
+      const deficit = weeklyWeightLossTarget * 1.1;
+      targetCalories = tdee - deficit;
     } else if (goalType === 'bulk') {
       targetCalories = tdee + 300;
     }
@@ -75,11 +82,11 @@ export default function ProfileForm({
     // 4. Calculate macronutrient goals
     const { carbs, protein, fat } = calculateMacros(targetCalories, goalType, currentWeight);
     
-    setLiveCalories(targetCalories);
+    setLiveCalories(Math.round(targetCalories));
     setLiveCarbs(carbs);
     setLiveProtein(protein);
     setLiveFat(fat);
-  }, [gender, age, height, currentWeight, bodyFatPercentage, skeletalMuscleMass, activityLevel, goalType, manualMode]);
+  }, [gender, age, height, currentWeight, bodyFatPercentage, skeletalMuscleMass, activityLevel, goalType, manualMode, weeklyWeightLossTarget]);
 
   // Adjust macros helper
   const handleMacroChange = (type: 'carbs'|'protein'|'fat', newVal: number) => {
@@ -119,6 +126,76 @@ export default function ProfileForm({
     return '✨ 맞춤형 커스텀 비율';
   }
 
+  const getWeeklyTargetDescription = (grams: number) => {
+    switch (grams) {
+      case 200:
+        return {
+          title: "초급 다이어트 (초경량 페이스 ☕️)",
+          badge: "매우 완만함",
+          badgeColor: "bg-teal-50 text-teal-600 border-teal-150 dark:bg-teal-950/20 dark:text-teal-400 dark:border-teal-900/50",
+          desc: "의지 소모가 적은 매우 부드러운 감량 페이스입니다. 극도의 배고픔 없이 자연스럽고 건강하게 오래 지속하기 좋습니다. (한 달 체지방 ~0.8kg 감량)"
+        };
+      case 300:
+        return {
+          title: "이지 다이어트 (부담 없는 페이스 🌿)",
+          badge: "완만함",
+          badgeColor: "bg-emerald-50 text-emerald-600 border-emerald-150 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/50",
+          desc: "체지방을 비교적 지치지 않고 마음 편히 채워가며 뺄 수 있는 촉촉한 속도입니다. 스트레스를 덜 받습니다. (한 달 체지방 ~1.2kg 감량)"
+        };
+      case 400:
+        return {
+          title: "스마트 다이어트 (기초 가이드 페이스 🌱)",
+          badge: "적당함",
+          badgeColor: "bg-blue-50 text-blue-600 border-blue-150 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/50",
+          desc: "일상 에너지 레벨을 높게 보존하면서, 식단 제어 효과도 가시적으로 볼 수 있는 기분 조율 선입니다. (한 달 체지방 ~1.6kg 감량)"
+        };
+      case 500:
+        return {
+          title: "스탠다드 다이어트 (2주당 1kg 감량 ⭐)",
+          badge: "정석 (추천)",
+          badgeColor: "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/50",
+          desc: "영양학회에서 가장 강력하게 보증하고 권장하는 표준 속도입니다. 2주일 내에 확실한 체지방 약 1kg 감량을 기대할 수 있습니다. (한 달 체지방 ~2.0kg 감량)"
+        };
+      case 600:
+        return {
+          title: "인텐시브 다이어트 (조금 더 스피디하게 🏃)",
+          badge: "약간 빠름",
+          badgeColor: "bg-orange-50 text-orange-600 border-orange-150 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/50",
+          desc: "식사량 조절에 약간의 공복 통제가 동반되지만, 매주 인바디 등에서 만족할 만한 빠른 피드백을 확인합니다. (한 달 체지방 ~2.4kg 감량)"
+        };
+      case 700:
+        return {
+          title: "하이 스피드 다이어트 (적극적 식단 집중 🔥)",
+          badge: "빠름",
+          badgeColor: "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/50",
+          desc: "체지방 감량이 전폭적으로 눈에 띄게 나타나는 구간으로, 정밀하고 일관성 높은 철저한 영양소 조율이 요구됩니다. (한 달 체지방 ~2.8kg 감량)"
+        };
+      case 800:
+        return {
+          title: "익스트림 다이어트 (고강도 탄식 케어 ⚡)",
+          badge: "매우 빠름",
+          badgeColor: "bg-rose-50 text-rose-600 border-rose-150 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/50",
+          desc: "주간 체지방이 시원하게 제거되지만 강도 높은 영양 통제가 필요합니다. 근손실 예방을 위한 단백질 섭취가 동반되어야 안전합니다. (한 달 체지방 ~3.2kg 감량)"
+        };
+      case 1000:
+        return {
+          title: "스피드 폭풍 다이어트 (초단기 긴급 감량 💣)",
+          badge: "최대 무리 구간",
+          badgeColor: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/50",
+          desc: "건강한 성인이 안전을 도모할 수 있는 최전방 마지노선 상한 속도입니다. 일시적인 단기 급찐급빠 시에만 조심히 적용하는 것이 좋습니다. (한 달 체지방 ~4.0kg 감량)"
+        };
+      default:
+        return {
+          title: "맞춤 다이어트 속도",
+          badge: "커스텀",
+          badgeColor: "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800",
+          desc: "나에게 어울리는 건강 속도를 직접 설정합니다."
+        };
+    }
+  };
+
+  const dietDesc = getWeeklyTargetDescription(weeklyWeightLossTarget);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -139,10 +216,13 @@ export default function ProfileForm({
       bodyFatPercentage: bodyFatPercentage > 0 ? bodyFatPercentage : undefined,
       activityLevel,
       goalType,
+      weeklyWeightLossTarget,
       targetCalories: liveCalories,
       targetCarbs: liveCarbs,
       targetProtein: liveProtein,
       targetFat: liveFat,
+      weeklyUpdateEnabled,
+      weeklyUpdateDay,
       updatedAt: new Date().toISOString()
     });
   };
@@ -173,7 +253,7 @@ export default function ProfileForm({
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="예: 건강한 토끼"
-              className="flex-1 text-xs h-10 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC] px-3 font-bold text-[#1E293B] focus:outline-none focus:border-[#3B82F6] touch-manipulation"
+              className="flex-1 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 rounded-xl bg-[#F8FAFC] dark:bg-slate-800 px-3 font-bold text-[#1E293B] dark:text-white focus:outline-none focus:border-[#3B82F6] touch-manipulation"
               required
             />
             <button
@@ -221,7 +301,9 @@ export default function ProfileForm({
 
         {/* Goal Choice */}
         <div>
-          <label className="text-xs font-bold text-[#64748B] block mb-1.5">다이어트 지향 목표</label>
+          <label className="text-xs font-bold text-[#64748B] dark:text-slate-400 block mb-1.5 flex items-center gap-1">
+            🎯 다이어트 지향 목표
+          </label>
           <div className="grid grid-cols-3 gap-1.5">
             {[
               { id: 'cut', name: '체지방 감량 다이어트' },
@@ -232,17 +314,58 @@ export default function ProfileForm({
                 key={g.id}
                 type="button"
                 onClick={() => setGoalType(g.id as any)}
-                className={`py-1.5 px-1 rounded-xl border text-center font-bold text-[10.5px] leading-3.5 transition-all h-11 flex items-center justify-center cursor-pointer ${
+                className={`px-1 rounded-xl border text-center font-bold text-[9.5px] tracking-tighter sm:text-[10.5px] transition-all h-12 flex items-center justify-center cursor-pointer ${
                   goalType === g.id
                     ? 'bg-[#3B82F6] border-[#3B82F6] text-white shadow-xs'
-                    : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B] hover:bg-[#F1F5F9]'
+                    : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B] hover:bg-[#F1F5F9] dark:bg-slate-900 dark:border-slate-850 dark:text-slate-450'
                 }`}
               >
-                {g.name}
+                {g.name === '체지방 감량 다이어트' ? (
+                  <span className="leading-tight block shrink-0">체지방 감량<br/>다이어트</span>
+                ) : (
+                  <span>{g.name}</span>
+                )}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Weekly Weight Loss Pace Selector (only for cut) */}
+        {goalType === 'cut' && (
+          <div className="flex flex-col gap-3 bg-gradient-to-br from-indigo-50/50 to-blue-50/20 dark:from-indigo-950/20 dark:to-slate-900/10 p-4 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/30">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-extrabold text-[#1E293B] dark:text-slate-200">
+                ⚡ 주간 평균 체지방 감량 속도
+              </span>
+              <span className={`text-[10px] font-black px-2 py-0.5 border rounded-full ${dietDesc.badgeColor}`}>
+                {dietDesc.badge}
+              </span>
+            </div>
+
+            <select
+              value={weeklyWeightLossTarget}
+              onChange={(e) => setWeeklyWeightLossTarget(Number(e.target.value))}
+              className="w-full text-xs h-10 border border-[#DBEAFE] dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 px-3 font-semibold text-[#1E293B] dark:text-white focus:outline-none focus:border-[#3B82F6] cursor-pointer"
+            >
+              <option value={200}>매주 200g 감량 (마일드 입문 페이스)</option>
+              <option value={300}>매주 300g 감량 (부담 없는 가벼운 페이스)</option>
+              <option value={400}>매주 400g 감량 (꾸준하고 탄탄한 페이스)</option>
+              <option value={500}>매주 500g 감량 (2주당 체지방 1.0kg 감량 - 권장 표준 ⭐)</option>
+              <option value={600}>매주 600g 감량 (액티브 다이어트 페이스)</option>
+              <option value={700}>매주 700g 감량 (약간 타이트한 속도 페이스)</option>
+              <option value={800}>매주 800g 감량 (체중 집중 감량 페이스)</option>
+              <option value={1000}>매주 1000g 감량 (1kg 감량 - 초단기 최대 한계 폭화선)</option>
+            </select>
+
+            {/* Educational Info-box */}
+            <div className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+              <p className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1 mb-1">
+                <span>{dietDesc.title}</span>
+              </p>
+              <p>{dietDesc.desc}</p>
+            </div>
+          </div>
+        )}
 
         {/* Core parameters via Touch UX Number Adjusters */}
         <div className="flex flex-col gap-3 bg-[#F8FAFC] p-3 rounded-2xl border border-[#E2E8F0]">
@@ -416,6 +539,46 @@ export default function ProfileForm({
           </div>
         </div>
 
+        {/* Weekly Settings */}
+        <div className="flex flex-col gap-3 bg-[#F8FAFC] dark:bg-slate-800 p-3 rounded-2xl border border-[#E2E8F0] dark:border-slate-700">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-[#1E293B] dark:text-white flex items-center gap-1">
+              <Activity className="w-3.5 h-3.5 text-[#64748B]" /> 주간 자동 칼로리 갱신
+            </span>
+            <button
+              type="button"
+              onClick={() => setWeeklyUpdateEnabled(!weeklyUpdateEnabled)}
+              className={`w-10 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                weeklyUpdateEnabled ? 'bg-[#3B82F6]' : 'bg-slate-300 dark:bg-slate-600'
+              }`}
+            >
+              <div className={`bg-white w-3 h-3 rounded-full shadow-sm transform transition-transform ${weeklyUpdateEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          
+          {weeklyUpdateEnabled && (
+            <div>
+              <label className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 block mb-1.5">업데이트 요일 정하기</label>
+              <div className="grid grid-cols-7 gap-1">
+                {['일', '월', '화', '수', '목', '금', '토'].map((day, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setWeeklyUpdateDay(idx)}
+                    className={`h-8 rounded-lg text-[10px] font-bold transition-colors border ${
+                      weeklyUpdateDay === idx 
+                        ? 'bg-[#3B82F6] text-white border-[#3B82F6]' 
+                        : 'bg-white dark:bg-slate-900 border-[#E2E8F0] dark:border-slate-700 text-[#64748B] dark:text-slate-400 hover:bg-slate-50'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
       <button
@@ -424,7 +587,7 @@ export default function ProfileForm({
         className="w-full h-11 bg-gradient-to-r from-[#0EA5E9] to-[#3B82F6] text-white text-xs font-extrabold rounded-xl hover:brightness-105 active:scale-98 transition-all disabled:opacity-50 touch-manipulation shadow-md flex items-center justify-center cursor-pointer mt-2"
         id="btn-save-profile"
       >
-        {isLoading ? '처리 중...' : '프로필 만들기'}
+        {isLoading ? '처리 중...' : initialProfile ? '프로필 저장' : '프로필 만들기'}
       </button>
     </form>
   );

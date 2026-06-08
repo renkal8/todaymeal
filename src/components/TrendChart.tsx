@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -10,6 +10,7 @@ import {
   Legend,
   ReferenceLine
 } from 'recharts';
+import { ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calendar, Settings2 } from 'lucide-react';
 import { HealthRecord } from '../types';
 
 interface TrendChartProps {
@@ -17,10 +18,108 @@ interface TrendChartProps {
   targetWeight: number;
 }
 
-type MetricType = 'all' | 'weight' | 'muscle' | 'fat' | 'fatPct';
+type PeriodType = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
 export default function TrendChart({ records, targetWeight }: TrendChartProps) {
-  const [activeMetric, setActiveMetric] = useState<MetricType>('all');
+  const [period, setPeriod] = useState<PeriodType>('DAILY');
+  const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({
+    weight: true,
+    muscle: false,
+    fat: false,
+    fatPct: false,
+    expected: true,
+  });
+  
+  // Custom date range state
+  const [startDate, setStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+  
+  const [isDateRangeOpen, setIsDateRangeOpen] = useState(false);
+  const [isCalendarPopupOpen, setIsCalendarPopupOpen] = useState(false);
+  
+  const [tempStartDate, setTempStartDate] = useState<string>(startDate);
+  const [tempEndDate, setTempEndDate] = useState<string>(endDate);
+
+  const [calendarViewDateStart, setCalendarViewDateStart] = useState<Date>(new Date(startDate));
+  const [calendarViewDateEnd, setCalendarViewDateEnd] = useState<Date>(new Date(endDate));
+  
+  const renderCalendar = (
+    viewDate: Date,
+    setViewDate: (d: Date) => void,
+    selectedDate: string,
+    onSelectDate: (d: string) => void,
+    minDate?: string,
+    maxDate?: string
+  ) => {
+    return (
+      <div className="w-56 bg-white border border-neutral-200 shadow-xl rounded-xl p-2 z-50">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex gap-0.5">
+            <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear() - 1, viewDate.getMonth(), 1))} className="p-1 text-neutral-400 hover:bg-neutral-100 rounded-lg">
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="p-1 text-neutral-400 hover:bg-neutral-100 rounded-lg">
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <span className="font-extrabold text-[11px] text-neutral-800">
+            {viewDate.getFullYear()}년 {viewDate.getMonth() + 1}월
+          </span>
+          <div className="flex gap-0.5">
+            <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))} className="p-1 text-neutral-400 hover:bg-neutral-100 rounded-lg">
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear() + 1, viewDate.getMonth(), 1))} className="p-1 text-neutral-400 hover:bg-neutral-100 rounded-lg">
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-[9px] text-center font-bold text-neutral-500 mb-1">
+          {['일','월','화','수','목','금','토'].map(d => <div key={d}>{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-0.5 text-center">
+          {Array.from({ length: 42 }).map((_, i) => {
+            const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+            const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            
+            const dayNum = i - firstDay + 1;
+            const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
+            const dStr = isCurrentMonth ? `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}` : '';
+            const isSelected = isCurrentMonth && selectedDate === dStr;
+            
+            let disabled = false;
+            if (isCurrentMonth) {
+              if (minDate && dStr < minDate) disabled = true;
+              if (maxDate && dStr > maxDate) disabled = true;
+            }
+            
+            return (
+              <div key={i} className="aspect-square flex items-center justify-center p-0.5">
+                {isCurrentMonth && (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onSelectDate(dStr)}
+                    className={`w-full h-full flex items-center justify-center rounded-lg transition-colors cursor-pointer text-[10px] font-semibold ${
+                      isSelected ? 'bg-[#3B82F6] text-white shadow-sm' : disabled ? 'text-neutral-300 opacity-50 cursor-not-allowed' : 'bg-transparent text-neutral-600 hover:bg-neutral-100'
+                    }`}
+                  >
+                    {dayNum}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   if (!records || records.length === 0) {
     return (
@@ -36,16 +135,84 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
     new Date(a.loggedAt).getTime() - new Date(b.loggedAt).getTime()
   );
 
-  // Map to chart format
-  const chartData = sortedRecords.map(rec => {
+  // Group records based on period
+  type GroupedData = { [key: string]: { sum: any, count: number, maxTime: number, displayLabel: string, fullDate: string } };
+  const grouped: GroupedData = {};
+
+  sortedRecords.forEach(rec => {
     const d = new Date(rec.loggedAt);
+    let key = '';
+    let displayLabel = '';
+    let fullDate = '';
+
+    // Date filtering check
+    const dTime = d.getTime();
+    const stTime = new Date(startDate).getTime();
+    // End date should include the whole day, so we add 24 hours minus 1 ms
+    const edTime = new Date(endDate).getTime() + 86399999;
+    
+    if (dTime < stTime || dTime > edTime) return;
+
+    if (period === 'DAILY') {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      key = `${yyyy}-${mm}-${dd}`;
+      displayLabel = `${mm}-${dd}`; // MM-DD
+      fullDate = key;
+    } else if (period === 'WEEKLY') {
+      const year = d.getFullYear();
+      const firstDay = new Date(year, 0, 1);
+      const pastDaysOfYear = (d.getTime() - firstDay.getTime()) / 86400000;
+      const weekNum = Math.ceil((pastDaysOfYear + firstDay.getDay() + 1) / 7);
+      key = `${year}-W${weekNum}`;
+      displayLabel = `${weekNum}주차`;
+      fullDate = `${year}년 ${weekNum}주차`;
+    } else if (period === 'MONTHLY') {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      displayLabel = `${d.getMonth() + 1}월`;
+      fullDate = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+    } else if (period === 'YEARLY') {
+      key = `${d.getFullYear()}`;
+      displayLabel = `${d.getFullYear()}년`;
+      fullDate = `${d.getFullYear()}년`;
+    } else {
+      key = d.toISOString().split('T')[0];
+      displayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+      fullDate = d.toLocaleDateString();
+    }
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        sum: { weight: 0, muscle: 0, fat: 0, fatPct: 0 },
+        count: 0,
+        maxTime: d.getTime(),
+        displayLabel,
+        fullDate
+      };
+    }
+
+    grouped[key].sum.weight += rec.weight || 0;
+    grouped[key].sum.muscle += rec.skeletalMuscleMass || 0;
+    grouped[key].sum.fat += rec.bodyFatMass || 0;
+    grouped[key].sum.fatPct += rec.bodyFatPercentage || 0;
+    grouped[key].count += 1;
+    grouped[key].maxTime = Math.max(grouped[key].maxTime, d.getTime());
+  });
+
+  const chartData = Object.values(grouped).sort((a, b) => a.maxTime - b.maxTime).map((g, index, arr) => {
+    const startWeight = sortedRecords.find(r => r.weight > 0)?.weight || targetWeight || 70;
+    const endWeight = targetWeight || startWeight;
+    // Calculate custom expected weight line
+    const expected = Number((startWeight + (endWeight - startWeight) * (index / Math.max(1, arr.length - 1))).toFixed(1));
     return {
-      date: `${d.getMonth() + 1}/${d.getDate()}`,
-      fullDate: d.toLocaleDateString(),
-      weight: rec.weight,
-      muscle: rec.skeletalMuscleMass || null,
-      fat: rec.bodyFatMass || null,
-      fatPct: rec.bodyFatPercentage || null,
+      date: g.displayLabel,
+      fullDate: g.fullDate,
+      weight: g.sum.weight > 0 ? Number((g.sum.weight / g.count).toFixed(1)) : null,
+      muscle: g.sum.muscle > 0 ? Number((g.sum.muscle / g.count).toFixed(1)) : null,
+      fat: g.sum.fat > 0 ? Number((g.sum.fat / g.count).toFixed(1)) : null,
+      fatPct: g.sum.fatPct > 0 ? Number((g.sum.fatPct / g.count).toFixed(1)) : null,
+      expected: expected,
     };
   });
 
@@ -53,7 +220,7 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white/95 backdrop-blur-md p-3 border border-neutral-100 rounded-xl shadow-lg text-xs leading-5">
-          <p className="font-bold text-neutral-800 mb-1">{payload[0].payload.fullDate}</p>
+          <p className="font-bold text-[#1E293B] mb-1">{payload[0].payload.fullDate}</p>
           {payload.map((entry: any) => {
             let label = '';
             let unit = '';
@@ -62,10 +229,11 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
             else if (entry.name === 'muscle') { label = '골격근량'; unit = 'kg'; }
             else if (entry.name === 'fat') { label = '체지방량'; unit = 'kg'; }
             else if (entry.name === 'fatPct') { label = '체지방률'; unit = '%'; }
+            else if (entry.name === 'expected') { label = '예상체중'; unit = 'kg'; }
 
             return (
-              <p key={entry.name} style={{ color }} className="font-medium font-mono">
-                {label}: {entry.value} {unit}
+              <p key={entry.name} style={{ color }} className="font-extrabold font-mono text-[11px]">
+                {label}: {entry.value}{unit}
               </p>
             );
           })}
@@ -75,43 +243,102 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
     return null;
   };
 
+  const toggleLine = (metric: string) => {
+    setVisibleLines(prev => ({
+      ...prev,
+      [metric]: !prev[metric]
+    }));
+  };
+
   return (
     <div className="bg-white border border-neutral-150 rounded-2xl p-4 shadow-xs">
       <div className="flex flex-col gap-3 mb-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-bold text-neutral-800">체성분 변화 차트</h3>
-          {targetWeight > 0 && (
-            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-100">
-              목표: {targetWeight}kg
-            </span>
-          )}
+        
+        {/* Title and Controls Row */}
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 relative">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-black text-neutral-800 whitespace-nowrap">목표차트</h3>
+            {targetWeight > 0 && (
+              <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded border border-emerald-100 text-[10px] whitespace-nowrap">
+                목표 {targetWeight}kg
+              </span>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap items-center justify-end gap-2 relative">
+            {/* Period groupings */}
+            <div className="flex bg-neutral-100 dark:bg-slate-800 rounded-lg p-1 border border-neutral-200 dark:border-slate-700">
+              {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as PeriodType[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-2 py-0.5 rounded text-[10px] transition-colors font-semibold ${
+                    period === p ? 'bg-white dark:bg-slate-700 text-neutral-800 dark:text-white shadow-xs' : 'text-neutral-500 dark:text-slate-400 hover:text-neutral-700 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {p === 'DAILY' ? '일' : p === 'WEEKLY' ? '주' : p === 'MONTHLY' ? '월' : '년'}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                if (!isDateRangeOpen) {
+                  setTempStartDate(startDate);
+                  setTempEndDate(endDate);
+                }
+                setIsDateRangeOpen(!isDateRangeOpen);
+                setIsCalendarPopupOpen(false);
+              }}
+              className={`flex items-center gap-1 border px-2 py-1 rounded-lg transition-colors font-semibold text-[10px] whitespace-nowrap ${
+                isDateRangeOpen 
+                  ? 'border-[#3B82F6] bg-[#EFF6FF] text-[#3B82F6]' 
+                  : 'border-neutral-200 dark:border-slate-700 bg-neutral-50 dark:bg-slate-800 text-neutral-600 dark:text-slate-300 hover:bg-neutral-100'
+              }`}
+            >
+              <Calendar className="w-3 h-3" /> 기간설정
+            </button>
+          </div>
         </div>
 
-        {/* Metric selection tabs to prevent overlapping graphs on narrow phones */}
-        <div className="flex flex-wrap gap-1 bg-neutral-100/70 p-0.5 rounded-lg">
-          {(
-            [
-              { id: 'all', name: '전체' },
-              { id: 'weight', name: '체중' },
-              { id: 'muscle', name: '골격근' },
-              { id: 'fat', name: '체지방' },
-              { id: 'fatPct', name: '지방률%' }
-            ] as const
-          ).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveMetric(tab.id)}
-              className={`flex-1 text-[11px] font-medium py-1.5 px-1 rounded-md transition-all touch-manipulation cursor-pointer text-center ${
-                activeMetric === tab.id
-                  ? 'bg-white text-neutral-900 shadow-xs border border-neutral-200/50'
-                  : 'text-neutral-500 hover:text-neutral-800'
-              }`}
-              id={`tab-metric-${tab.id}`}
-            >
-              {tab.name}
-            </button>
-          ))}
-        </div>
+        {/* Date Range Selection Panel */}
+        {isDateRangeOpen && (
+          <div className="flex flex-col gap-3 bg-neutral-50 border border-neutral-200 rounded-xl p-3 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex justify-between items-center px-1">
+              <span className="text-[11px] font-bold text-neutral-600">조회 기간 상세 설정</span>
+              <button 
+                onClick={() => {
+                  setStartDate(tempStartDate);
+                  setEndDate(tempEndDate);
+                  setIsDateRangeOpen(false);
+                }}
+                className="bg-[#3B82F6] hover:bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-lg transition-colors shadow-sm active:scale-95"
+              >
+                확인
+              </button>
+            </div>
+            
+            <div className="flex flex-col md:flex-row justify-center gap-4">
+              <div className="flex flex-col gap-1 items-center">
+                <span className="flex items-center gap-1 text-[11px] font-bold text-[#3B82F6] bg-blue-50 px-2 py-1 rounded-md">
+                  시작일 <span className="font-mono font-medium text-neutral-600 ml-1">{tempStartDate}</span>
+				</span>
+                {renderCalendar(calendarViewDateStart, setCalendarViewDateStart, tempStartDate, (d) => { setTempStartDate(d); setCalendarViewDateStart(new Date(d)); }, undefined, tempEndDate)}
+              </div>
+              <div className="hidden md:flex items-center justify-center">
+                <span className="text-neutral-300 font-bold">~</span>
+              </div>
+              <div className="flex flex-col gap-1 items-center">
+                <span className="flex items-center gap-1 text-[11px] font-bold text-[#3B82F6] bg-blue-50 px-2 py-1 rounded-md">
+                  종료일 <span className="font-mono font-medium text-neutral-600 ml-1">{tempEndDate}</span>
+                </span>
+                {renderCalendar(calendarViewDateEnd, setCalendarViewDateEnd, tempEndDate, (d) => { setTempEndDate(d); setCalendarViewDateEnd(new Date(d)); }, tempStartDate, undefined)}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <p className="text-[10px] text-neutral-400 font-bold text-center">💡 아래 범례 버튼을 누르면 그래프 선을 켜고 끌 수 있습니다.</p>
       </div>
 
       <div className="w-full h-[220px]">
@@ -135,7 +362,7 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
             <Tooltip content={getCustomTooltip} />
             
             {/* Target Weight Reference Line */}
-            {activeMetric === 'weight' || activeMetric === 'all' ? (
+            {(visibleLines.weight || visibleLines.expected) && targetWeight > 0 ? (
               <ReferenceLine 
                 y={targetWeight} 
                 stroke="#10b981" 
@@ -144,8 +371,21 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
               />
             ) : null}
 
+            {/* Expected Line (예상곡선) - Thicker, Indigo line */}
+            {visibleLines.expected && (
+              <Line
+                type="monotone"
+                dataKey="expected"
+                name="expected"
+                stroke="#6366f1" 
+                strokeWidth={3.5}
+                dot={false}
+                activeDot={{ r: 6 }}
+              />
+            )}
+
             {/* Weights Line */}
-            {(activeMetric === 'weight' || activeMetric === 'all') && (
+            {visibleLines.weight && (
               <Line
                 type="monotone"
                 dataKey="weight"
@@ -158,7 +398,7 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
             )}
 
             {/* Muscle Line */}
-            {(activeMetric === 'muscle' || activeMetric === 'all') && (
+            {visibleLines.muscle && (
               <Line
                 type="monotone"
                 dataKey="muscle"
@@ -171,7 +411,7 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
             )}
 
             {/* Fat Mass Line */}
-            {(activeMetric === 'fat' || activeMetric === 'all') && (
+            {visibleLines.fat && (
               <Line
                 type="monotone"
                 dataKey="fat"
@@ -184,7 +424,7 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
             )}
 
             {/* Fat Percentage Line */}
-            {(activeMetric === 'fatPct' || activeMetric === 'all') && (
+            {visibleLines.fatPct && (
               <Line
                 type="monotone"
                 dataKey="fatPct"
@@ -200,31 +440,72 @@ export default function TrendChart({ records, targetWeight }: TrendChartProps) {
         </ResponsiveContainer>
       </div>
 
-      <div className="flex gap-4 justify-center mt-3 flex-wrap">
-        {(activeMetric === 'weight' || activeMetric === 'all') && (
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-1 bg-slate-800 rounded-sm" />
-            <span className="text-[10px] font-medium text-neutral-500">체중 (kg)</span>
-          </div>
-        )}
-        {(activeMetric === 'muscle' || activeMetric === 'all') && (
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-1 bg-blue-600 rounded-sm" />
-            <span className="text-[10px] font-medium text-neutral-500">골격근량 (kg)</span>
-          </div>
-        )}
-        {(activeMetric === 'fat' || activeMetric === 'all') && (
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-1 bg-red-600 rounded-sm" />
-            <span className="text-[10px] font-medium text-neutral-500">체지방량 (kg)</span>
-          </div>
-        )}
-        {(activeMetric === 'fatPct' || activeMetric === 'all') && (
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-1 bg-amber-600 rounded-sm" />
-            <span className="text-[10px] font-medium text-neutral-500">체지방률 (%)</span>
-          </div>
-        )}
+      {/* Interactive Legend Controls - Flexible layout with centered symmetric distribution */}
+      <div className="flex flex-wrap gap-1.5 justify-center mt-4 border-t border-neutral-100 pt-3">
+        <button
+          type="button"
+          onClick={() => toggleLine('weight')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap text-[10.5px] ${
+            visibleLines.weight 
+              ? 'border-slate-800 bg-slate-50 text-slate-900 font-extrabold shadow-xs' 
+              : 'border-neutral-200 bg-white text-neutral-400 font-semibold'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#1e293b]" />
+          <span>체중 (kg)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => toggleLine('expected')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap text-[10.5px] ${
+            visibleLines.expected 
+              ? 'border-indigo-600 bg-indigo-50/60 text-indigo-700 font-extrabold shadow-xs' 
+              : 'border-neutral-200 bg-white text-neutral-400 font-semibold'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#6366f1]" />
+          <span>예상곡선 (kg)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => toggleLine('muscle')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap text-[10.5px] ${
+            visibleLines.muscle 
+              ? 'border-blue-600 bg-blue-50 text-blue-700 font-extrabold shadow-xs' 
+              : 'border-neutral-200 bg-white text-neutral-400 font-semibold'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#2563eb]" />
+          <span>골격근 (kg)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => toggleLine('fat')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap text-[10.5px] ${
+            visibleLines.fat 
+              ? 'border-red-600 bg-red-50 text-red-700 font-extrabold shadow-xs' 
+              : 'border-neutral-200 bg-white text-neutral-400 font-semibold'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#dc2626]" />
+          <span>체지방 (kg)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => toggleLine('fatPct')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap text-[10.5px] ${
+            visibleLines.fatPct 
+              ? 'border-amber-600 bg-amber-50 text-amber-700 font-extrabold shadow-xs' 
+              : 'border-neutral-200 bg-white text-neutral-400 font-semibold'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#d97706]" />
+          <span>체지방률 (%)</span>
+        </button>
       </div>
     </div>
   );

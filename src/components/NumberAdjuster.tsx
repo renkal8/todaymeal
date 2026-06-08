@@ -83,57 +83,37 @@ export default function NumberAdjuster({
       </div>
 
       <div className="flex flex-col gap-1.5 w-full">
-        <div className="flex gap-1.5 w-full">
-          <button
-            type="button"
-            onClick={() => handleAdjust(-10)}
-            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-          >
-            -10
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAdjust(-1)}
-            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-          >
-            -1
-          </button>
-          {stepDecimal > 0 && (
-            <button
-              type="button"
-              onClick={() => handleAdjust(-0.1)}
-              className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-            >
-              -0.1
-            </button>
-          )}
-        </div>
-        
-        <div className="flex gap-1.5 w-full">
-          {stepDecimal > 0 && (
-            <button
-              type="button"
-              onClick={() => handleAdjust(0.1)}
-              className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-            >
-              +0.1
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => handleAdjust(1)}
-            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-          >
-            +1
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAdjust(10)}
-            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-          >
-            +10
-          </button>
-        </div>
+        {(() => {
+          const steps = stepDecimal > 0 ? [10, 1, 0.1] : [10, 5, 1];
+          return (
+            <>
+              <div className="flex gap-1.5 w-full">
+                {[...steps].reverse().map(step => (
+                  <button
+                    key={`minus-${step}`}
+                    type="button"
+                    onClick={() => handleAdjust(-step)}
+                    className="flex-1 h-11 flex items-center justify-center text-[13px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+                  >
+                    -{step}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1.5 w-full">
+                {[...steps].reverse().map(step => (
+                  <button
+                    key={`plus-${step}`}
+                    type="button"
+                    onClick={() => handleAdjust(step)}
+                    className="flex-1 h-11 flex items-center justify-center text-[13px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+                  >
+                    +{step}
+                  </button>
+                ))}
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );

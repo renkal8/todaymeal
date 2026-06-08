@@ -16,6 +16,9 @@ export interface UserProfile {
   targetCarbs: number; // in grams
   targetProtein: number; // in grams
   targetFat: number; // in grams
+  weeklyUpdateEnabled?: boolean;
+  weeklyUpdateDay?: number; // 0 for Sunday, 1 for Monday, etc.
+  weeklyWeightLossTarget?: number; // in grams per week (e.g. 500 for standard)
   updatedAt: string;
 }
 
@@ -40,6 +43,7 @@ export interface FoodLog {
   mealTime?: MealTime;
   name: string;
   category: string;
+  icon?: string;
   grams: number;
   calories: number;
   carbs: number;
@@ -60,7 +64,7 @@ export interface FastingLog {
 export interface FoodPreset {
   id: string;
   name: string;
-  category: 'meat' | 'fish' | 'carbs' | 'veg' | 'dairy' | 'nuts' | 'shake' | 'custom';
+  category: string;
   icon: string;
   // Nutrition values per 100g (or per serving)
   baseCalories: number;
@@ -77,6 +81,7 @@ export interface MealRoutine {
   mealTime: MealTime;
   foods: {
     name: string;
+    icon?: string;
     grams: number;
     calories: number;
     carbs: number;

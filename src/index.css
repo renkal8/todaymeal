@@ -25,6 +25,15 @@ body {
   border-radius: 9999px;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
 /* Base Dark Mode Hacks for hardcoded colors */
 html.dark body {
   background-color: #0f172a;
@@ -33,8 +42,8 @@ html.dark body {
 html.dark .bg-\[\#F8FAFC\], html.dark .bg-slate-50 { background-color: #0f172a !important; }
 html.dark .bg-\[\#EFF6FF\] { background-color: #1e3a8a !important; }
 html.dark .bg-white { background-color: #1e293b !important; }
-html.dark .text-\[\#1E293B\], html.dark .text-neutral-800, html.dark .text-slate-900, html.dark .text-slate-800, html.dark .text-slate-700 { color: #f8fafc !important; }
-html.dark .text-\[\#64748B\], html.dark .text-neutral-500, html.dark .text-slate-500, html.dark .text-slate-600 { color: #94a3b8 !important; }
+html.dark .text-\[\#1E293B\], html.dark .text-neutral-700, html.dark .text-neutral-800, html.dark .text-neutral-900, html.dark .text-slate-900, html.dark .text-slate-950, html.dark .text-slate-800, html.dark .text-slate-700, html.dark .text-black, html.dark .text-slate-600 { color: #f8fafc !important; }
+html.dark .text-\[\#64748B\], html.dark .text-neutral-500, html.dark .text-neutral-400, html.dark .text-neutral-600, html.dark .text-slate-500, html.dark .text-slate-400 { color: #94a3b8 !important; }
 html.dark .border-\[\#E2E8F0\], html.dark .border-neutral-150, html.dark .border-neutral-200 { border-color: #334155 !important; }
 html.dark .border-\[\#DBEAFE\], html.dark .border-\[\#F1F5F9\] { border-color: #1e40af !important; }
 html.dark .bg-\[\#F1F5F9\] { background-color: #334155 !important; }
