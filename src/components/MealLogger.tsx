@@ -7,9 +7,10 @@ import { Search, Plus, Sparkles, X, ChevronRight, Check } from 'lucide-react';
 interface MealLoggerProps {
   onAddLog: (log: Omit<FoodLog, 'userId'>) => void;
   dateStr: string;
+  onOpenCopyModal?: () => void;
 }
 
-export default function MealLogger({ onAddLog, dateStr }: MealLoggerProps) {
+export default function MealLogger({ onAddLog, dateStr, onOpenCopyModal }: MealLoggerProps) {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activePreset, setActivePreset] = useState<FoodPreset | null>(null);
@@ -91,14 +92,24 @@ export default function MealLogger({ onAddLog, dateStr }: MealLoggerProps) {
       {!activePreset && !isCustomMode ? (
         <div className="flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-[#1E293B]">식단 신속 추가</h3>
-            <button
-              onClick={handleInitializeCustom}
-              className="text-[11px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE] hover:bg-[#DBEAFE]/50 cursor-pointer transition-all"
-              id="btn-custom-meal"
-            >
-              ✨ 직접 기입 등록
-            </button>
+            <h3 className="text-sm font-bold text-[#1E293B]">식단 추가</h3>
+            <div className="flex gap-2">
+               <button
+                 onClick={() => {
+                   if (onOpenCopyModal) onOpenCopyModal();
+                 }}
+                 className="text-[11px] font-extrabold text-[#64748B] bg-[#F1F5F9] px-2.5 py-1 rounded-lg border border-[#E2E8F0] hover:bg-[#E2E8F0] cursor-pointer transition-all"
+               >
+                 이전 기록 복사하기
+               </button>
+               <button
+                 onClick={handleInitializeCustom}
+                 className="text-[11px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE] hover:bg-[#DBEAFE]/50 cursor-pointer transition-all"
+                 id="btn-custom-meal"
+               >
+                 ✨ 직접등록
+               </button>
+            </div>
           </div>
 
           {/* Search bar */}

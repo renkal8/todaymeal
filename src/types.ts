@@ -30,7 +30,7 @@ export interface HealthRecord {
   loggedAt: string; // ISO string
 }
 
-export type MealTime = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealTime = string;
 
 export interface FoodLog {
   id?: string;

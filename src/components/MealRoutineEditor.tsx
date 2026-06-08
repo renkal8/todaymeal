@@ -85,8 +85,8 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
 
   return (
     <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-[#E2E8F0] dark:border-slate-800 rounded-[24px] p-5 shadow-xs">
-        <h2 className="text-sm font-extrabold text-[#1E293B] dark:text-white mb-4">내 식단 루틴 관리</h2>
+      <div className="bg-white border border-[#E2E8F0] rounded-[24px] p-5 shadow-xs">
+        <h2 className="text-sm font-extrabold text-[#1E293B] mb-4">내 식단 루틴 관리</h2>
 
         {isCreating ? (
           <div className="flex flex-col gap-4">
@@ -97,7 +97,7 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
                 value={routineName}
                 onChange={e => setRoutineName(e.target.value)}
                 placeholder="예: 다이어트 아침 정식"
-                className="w-full text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-3 font-semibold focus:border-[#3B82F6] outline-none"
+                className="w-full text-xs h-10 border border-[#E2E8F0] rounded-xl px-3 font-semibold focus:border-[#3B82F6] outline-none"
               />
             </div>
             
@@ -115,8 +115,8 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
                     onClick={() => setTargetMeal(m.id as MealTime)}
                     className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition-colors ${
                       targetMeal === m.id 
-                        ? 'border-[#3B82F6] bg-[#EFF6FF] text-[#3B82F6] dark:bg-slate-800 dark:border-blue-500' 
-                        : 'border-[#E2E8F0] dark:border-slate-700 text-[#64748B] hover:bg-slate-50 dark:hover:bg-slate-800'
+                        ? 'border-[#3B82F6] bg-[#EFF6FF] text-[#3B82F6]' 
+                        : 'border-[#E2E8F0] text-[#64748B] hover:bg-slate-50'
                     }`}
                   >
                     <span className="text-xl mb-1">{m.icon}</span>
@@ -126,20 +126,20 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
               </div>
             </div>
 
-            <div className="bg-[#F8FAFC] dark:bg-slate-800/50 p-3.5 rounded-2xl border border-[#E2E8F0] dark:border-slate-700 space-y-3 shadow-inner">
-              <h3 className="text-xs font-bold text-[#1E293B] dark:text-white">음식 구성품 추가</h3>
+            <div className="bg-[#F8FAFC] p-3.5 rounded-2xl border border-[#E2E8F0] space-y-3 shadow-inner">
+              <h3 className="text-xs font-bold text-[#1E293B]">음식 구성품 추가</h3>
               {currentFoods.length > 0 && (
                 <div className="flex flex-col gap-2 mb-2">
                   {currentFoods.map((f, i) => (
-                    <div key={i} className="flex justify-between items-center text-xs bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-[#E2E8F0] dark:border-slate-700 shadow-sm">
+                    <div key={i} className="flex justify-between items-center text-xs bg-white p-2.5 rounded-xl border border-[#E2E8F0] shadow-sm">
                       <div>
-                        <p className="font-extrabold text-[#1E293B] dark:text-white">{f.name}</p>
+                        <p className="font-extrabold text-[#1E293B]">{f.name}</p>
                         <p className="text-[10px] text-[#64748B] font-mono mt-0.5">{f.grams}g / {f.calories}kcal</p>
                       </div>
                       <button onClick={() => deleteTempFood(i)} className="text-rose-500 p-1.5 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   ))}
-                  <div className="border-t border-[#E2E8F0] dark:border-slate-700 pt-2.5 text-[11px] font-bold text-center text-[#64748B]">
+                  <div className="border-t border-[#E2E8F0] pt-2.5 text-[11px] font-bold text-center text-[#64748B]">
                     총 칼로리: <span className="text-[#3B82F6]">{currentFoods.reduce((a, b) => a + b.calories, 0)} kcal</span>
                   </div>
                 </div>
@@ -152,28 +152,28 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
                     placeholder="음식명 (ex: 닭가슴살)"
                     value={foodName}
                     onChange={e => setFoodName(e.target.value)}
-                    className="flex-1 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-3 outline-none focus:border-[#3B82F6] transition-colors"
+                    className="flex-1 text-xs h-10 border border-[#E2E8F0] rounded-xl px-3 outline-none focus:border-[#3B82F6] transition-colors"
                   />
                   <input
                     type="number"
                     placeholder="g"
                     value={foodGrams || ''}
                     onChange={e => setFoodGrams(Number(e.target.value))}
-                    className="w-16 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-2 text-center outline-none focus:border-[#3B82F6] transition-colors"
+                    className="w-16 text-xs h-10 border border-[#E2E8F0] rounded-xl px-2 text-center outline-none focus:border-[#3B82F6] transition-colors"
                   />
                 </div>
                 <div className="flex gap-2">
-                  <input type="number" placeholder="kcal" value={foodCals || ''} onChange={e => setFoodCals(Number(e.target.value))} className="flex-1 w-0 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-3 outline-none focus:border-[#3B82F6]"/>
-                  <input type="number" placeholder="탄(g)" value={foodCarbs || ''} onChange={e => setFoodCarbs(Number(e.target.value))} className="w-14 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 text-[#3B82F6] font-bold rounded-xl px-1 text-center outline-none focus:border-[#3B82F6]"/>
-                  <input type="number" placeholder="단(g)" value={foodProtein || ''} onChange={e => setFoodProtein(Number(e.target.value))} className="w-14 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 text-emerald-500 font-bold rounded-xl px-1 text-center outline-none focus:border-emerald-500"/>
-                  <input type="number" placeholder="지(g)" value={foodFat || ''} onChange={e => setFoodFat(Number(e.target.value))} className="w-14 text-xs h-10 border border-[#E2E8F0] dark:border-slate-700 dark:bg-slate-800 text-rose-500 font-bold rounded-xl px-1 text-center outline-none focus:border-rose-500"/>
+                  <input type="number" placeholder="kcal" value={foodCals || ''} onChange={e => setFoodCals(Number(e.target.value))} className="flex-1 w-0 text-xs h-10 border border-[#E2E8F0] rounded-xl px-3 outline-none focus:border-[#3B82F6]"/>
+                  <input type="number" placeholder="탄(g)" value={foodCarbs || ''} onChange={e => setFoodCarbs(Number(e.target.value))} className="w-14 text-xs h-10 border border-[#E2E8F0] text-[#3B82F6] font-bold rounded-xl px-1 text-center outline-none focus:border-[#3B82F6]"/>
+                  <input type="number" placeholder="단(g)" value={foodProtein || ''} onChange={e => setFoodProtein(Number(e.target.value))} className="w-14 text-xs h-10 border border-[#E2E8F0] text-emerald-500 font-bold rounded-xl px-1 text-center outline-none focus:border-emerald-500"/>
+                  <input type="number" placeholder="지(g)" value={foodFat || ''} onChange={e => setFoodFat(Number(e.target.value))} className="w-14 text-xs h-10 border border-[#E2E8F0] text-rose-500 font-bold rounded-xl px-1 text-center outline-none focus:border-rose-500"/>
                 </div>
                 <button onClick={handleAddFoodTemp} className="w-full h-10 bg-[#3B82F6] hover:bg-blue-600 text-white text-xs font-bold rounded-xl shadow-xs transition-colors active:scale-95">음식 보관함에 담기</button>
               </div>
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => setIsCreating(false)} className="flex-1 h-10 border border-[#E2E8F0] dark:border-slate-700 text-[#64748B] dark:text-neutral-300 font-bold rounded-xl text-xs">취소</button>
+              <button onClick={() => setIsCreating(false)} className="flex-1 h-10 border border-[#E2E8F0] text-[#64748B] font-bold rounded-xl text-xs">취소</button>
               <button onClick={handleCreateNewRoutine} className="flex-1 h-10 bg-[#3B82F6] text-white font-bold rounded-xl text-xs">루틴 저장</button>
             </div>
           </div>

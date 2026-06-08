@@ -165,16 +165,29 @@ export default function ProfileForm({
         {/* Profile Name */}
         <div>
           <label className="text-xs font-bold text-[#64748B] block mb-1.5 flex items-center gap-1">
-            <User className="w-3.5 h-3.5" /> 불릴 이름 (프로필명)
+            <User className="w-3.5 h-3.5" /> 프로필명
           </label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="다이어터"
-            className="w-full text-xs h-10 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC] px-3 font-bold text-[#1E293B] focus:outline-none focus:border-[#3B82F6] touch-manipulation"
-            required
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="예: 건강한 토끼"
+              className="flex-1 text-xs h-10 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC] px-3 font-bold text-[#1E293B] focus:outline-none focus:border-[#3B82F6] touch-manipulation"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const ADJECTIVES = ['건강한', '날렵한', '꾸준한', '행복한', '멋진', '활기찬', '튼튼한', '가벼운'];
+                const NOUNS = ['호랑이', '토끼', '거북이', '코끼리', '사자', '펭귄', '다람쥐', '고양이'];
+                setDisplayName(`${ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]} ${NOUNS[Math.floor(Math.random() * NOUNS.length)]}`);
+              }}
+              className="px-3 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl whitespace-nowrap transition-colors border border-[#E2E8F0]"
+            >
+              랜덤생성
+            </button>
+          </div>
         </div>
 
         {/* Gender Choice */}

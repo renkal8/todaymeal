@@ -18,6 +18,7 @@ import ProfileForm from './components/ProfileForm';
 import MealLogger from './components/MealLogger';
 import TrendChart from './components/TrendChart';
 import NumberAdjuster from './components/NumberAdjuster';
+import CopyMealsModal from './components/CopyMealsModal';
 
 // Lucide Icons
 import {
@@ -31,6 +32,8 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Info,
   CheckCircle2,
   Lock,
@@ -55,15 +58,21 @@ function MealGroupItem({
 }: { 
   groupKey: string, foodLogs: FoodLog[], handleDeleteFoodLog: (id: string) => void, setActiveMealTime: (id: any) => void 
 }) {
-  const allGroups = {
-    'breakfast': { id: 'breakfast', title: '아침 식사', icon: '☀️' },
-    'lunch': { id: 'lunch', title: '점심 식사', icon: '🌤️' },
-    'dinner': { id: 'dinner', title: '저녁 식사', icon: '🌙' },
-    'snack': { id: 'snack', title: '간식', icon: '🍪' }
+  const getGroupInfo = (key: string) => {
+    const defaultGroups: Record<string, { id: string, title: string, icon: string }> = {
+      'breakfast': { id: 'breakfast', title: '아침 식사', icon: '☀️' },
+      'lunch': { id: 'lunch', title: '점심 식사', icon: '🍲' },
+      'dinner': { id: 'dinner', title: '저녁 식사', icon: '🌙' },
+      'snack': { id: 'snack', title: '간식', icon: '🍪' }
+    };
+    if (defaultGroups[key]) return defaultGroups[key];
+    if (key.startsWith('meal_')) return { id: key, title: `추가 식사 ${key.split('_')[1]}`, icon: '🍱' };
+    if (key.startsWith('snack_')) return { id: key, title: `추가 간식 ${key.split('_')[1]}`, icon: '🧁' };
+    return { id: key, title: '식사', icon: '🍽️' };
   };
-  const group = allGroups[groupKey as keyof typeof allGroups];
-  if (!group) return null;
-  const isSnack = group.id === 'snack';
+
+  const group = getGroupInfo(groupKey);
+  const isSnack = groupKey.includes('snack');
   
   const groupLogs = foodLogs.filter(log => log.mealTime === group.id || (!log.mealTime && group.id === 'snack'));
   const groupCals = groupLogs.reduce((sum, item) => sum + item.calories, 0);
@@ -80,10 +89,10 @@ function MealGroupItem({
     >
       <div className={`flex justify-between items-center p-3.5 bg-[#F8FAFC] border-b ${isSnack ? 'border-[#DBEAFE]' : 'border-[#F1F5F9]'}`}>
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center text-lg w-8 h-8 bg-white dark:bg-slate-800 shadow-sm rounded-lg border border-[#E2E8F0] dark:border-slate-700">
+          <div className="flex items-center justify-center text-lg w-8 h-8 bg-white shadow-sm rounded-lg border border-[#E2E8F0]">
              {group.icon}
           </div>
-          <span className="text-sm font-black text-[#1E293B] dark:text-white ml-1">{group.title}</span>
+          <span className="text-sm font-black text-[#1E293B] ml-1">{group.title}</span>
           {groupCals > 0 && <span className="text-xs font-extrabold text-[#3B82F6] font-mono ml-1">{groupCals} kcal</span>}
         </div>
         
@@ -155,11 +164,14 @@ export default function App() {
   // Calendar
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [monthlySummary, setMonthlySummary] = useState<Record<string, number>>({});
+  const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date());
 
   // States
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'composition' | 'profile' | 'routine'>('dashboard');
 
   const [mealOrder, setMealOrder] = useState<string[]>(() => {
@@ -680,32 +692,57 @@ export default function App() {
                   {isCalendarOpen && (
                     <div className="absolute top-8 left-1/2 -translate-x-1/2 w-64 bg-white border border-[#E2E8F0] shadow-xl rounded-2xl p-3 z-50">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-xs pl-1">{selectedDate.substring(0, 7)}</span>
+                        <div className="flex gap-0.5">
+                          <button onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear() - 1, calendarViewDate.getMonth(), 1))} className="p-1 text-[#94A3B8] hover:bg-slate-50 rounded-lg">
+                            <ChevronsLeft className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1))} className="p-1 text-[#94A3B8] hover:bg-slate-50 rounded-lg">
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <span className="font-extrabold text-xs text-[#1E293B]">
+                          {calendarViewDate.getFullYear()}-{String(calendarViewDate.getMonth() + 1).padStart(2, '0')}
+                        </span>
+                        <div className="flex gap-0.5">
+                          <button onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1))} className="p-1 text-[#94A3B8] hover:bg-slate-50 rounded-lg">
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear() + 1, calendarViewDate.getMonth(), 1))} className="p-1 text-[#94A3B8] hover:bg-slate-50 rounded-lg">
+                            <ChevronsRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-7 gap-1 text-[10px] text-center font-bold text-[#64748B] mb-1">
                         {['일','월','화','수','목','금','토'].map(d => <div key={d}>{d}</div>)}
                       </div>
                       <div className="grid grid-cols-7 gap-1 text-center">
-                        {Array.from({ length: 31 }).map((_, i) => {
-                          const dayNum = i + 1;
-                          const dStr = `${selectedDate.substring(0, 7)}-${dayNum.toString().padStart(2, '0')}`;
-                          const isSelected = selectedDate === dStr;
-                          const cals = monthlySummary[dStr] || 0;
+                        {Array.from({ length: 42 }).map((_, i) => {
+                          const firstDay = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), 1).getDay();
+                          const daysInMonth = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 0).getDate();
+                          
+                          const dayNum = i - firstDay + 1;
+                          const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
+                          const dStr = isCurrentMonth ? `${calendarViewDate.getFullYear()}-${String(calendarViewDate.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}` : '';
+                          const isSelected = isCurrentMonth && selectedDate === dStr;
+                          const cals = isCurrentMonth ? (monthlySummary[dStr] || 0) : 0;
                           
                           return (
-                            <button
-                              key={dStr}
-                              onClick={() => {
-                                setSelectedDate(dStr);
-                                setIsCalendarOpen(false);
-                              }}
-                              className={`flex flex-col items-center justify-center py-1 rounded-xl transition-colors cursor-pointer ${
-                                isSelected ? 'bg-[#3B82F6] text-white' : cals > 0 ? 'bg-[#EFF6FF] text-[#1E293B]' : 'bg-transparent text-[#94A3B8] hover:bg-slate-50'
-                              } ${cals === 0 && !isSelected ? 'opacity-40' : ''}`}
-                            >
-                              <span className="font-bold text-xs">{dayNum}</span>
-                              {cals > 0 && <span className="text-[7px] font-mono mt-0.5 leading-none px-1 rounded-full bg-white/30 truncate max-w-full">{cals}</span>}
-                            </button>
+                            <div key={i} className="aspect-square flex items-center justify-center p-0.5">
+                              {isCurrentMonth && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedDate(dStr);
+                                    setIsCalendarOpen(false);
+                                  }}
+                                  className={`w-full h-full flex flex-col items-center justify-center rounded-xl transition-colors cursor-pointer ${
+                                    isSelected ? 'bg-[#3B82F6] text-white shadow-sm' : cals > 0 ? 'bg-[#EFF6FF] text-[#1E293B]' : 'bg-transparent text-[#94A3B8] hover:bg-slate-50'
+                                  } ${cals === 0 && !isSelected ? 'opacity-40' : ''}`}
+                                >
+                                  <span className="font-bold text-[11px]">{dayNum}</span>
+                                  {cals > 0 && <span className="text-[7px] font-mono leading-none rounded-full max-w-full text-center mt-0.5">{cals}</span>}
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -803,7 +840,31 @@ export default function App() {
                         취소 및 돌아가기
                       </button>
                     </div>
-                    <MealLogger onAddLog={handleAddFoodLog} dateStr={selectedDate} />
+                    <MealLogger 
+                      onAddLog={handleAddFoodLog} 
+                      dateStr={selectedDate} 
+                      onOpenCopyModal={() => setIsCopyModalOpen(true)}
+                    />
+                    {isCopyModalOpen && (
+                      <CopyMealsModal
+                        userId={user.uid}
+                        currentDate={selectedDate}
+                        onClose={() => setIsCopyModalOpen(false)}
+                        onCopy={async (foodsToCopy) => {
+                          try {
+                            const addPromises = foodsToCopy.map(log => 
+                              dbService.addFoodLog(user.uid, { ...log, mealTime: activeMealTime || log.mealTime })
+                            );
+                            await Promise.all(addPromises);
+                            await loadDayFoods();
+                            setIsCopyModalOpen(false);
+                            setActiveMealTime(null);
+                          } catch (err) {
+                            console.error('Failed to copy', err);
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                 ) : (
                   <>
@@ -828,6 +889,33 @@ export default function App() {
                     </Reorder.Group>
                   </>
                 )}
+              </div>
+              
+              <div className="flex gap-2 mt-4 px-1">
+                <button 
+                  onClick={() => {
+                    const nextMealIdx = mealOrder.filter(k => k.startsWith('meal_')).length + 1;
+                    const newKey = 'meal_' + nextMealIdx;
+                    const newOrder = [...mealOrder, newKey];
+                    setMealOrder(newOrder);
+                    localStorage.setItem('mealOrder', JSON.stringify(newOrder));
+                  }} 
+                  className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-[#3B82F6]"
+                >
+                  <Plus className="w-4 h-4 text-[#3B82F6]" /> <span className="text-[#1E293B] dark:text-white">식사 추가하기</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    const nextSnackIdx = mealOrder.filter(k => k.startsWith('snack_')).length + 1;
+                    const newKey = 'snack_' + nextSnackIdx;
+                    const newOrder = [...mealOrder, newKey];
+                    setMealOrder(newOrder);
+                    localStorage.setItem('mealOrder', JSON.stringify(newOrder));
+                  }} 
+                  className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                >
+                  <Plus className="w-4 h-4 text-pink-500" /> <span>간식 추가하기</span>
+                </button>
               </div>
 
               {/* Line Trend Chart Metrics */}
@@ -957,51 +1045,51 @@ export default function App() {
           {/* TAB 4: MY PROFILE / SETTINGS */}
           {activeTab === 'profile' && !isEditingProfile && profile && (
             <div className="flex flex-col gap-4">
-              <div className="bg-white border border-neutral-150 rounded-2xl p-4 shadow-xs flex flex-col gap-3.5">
-                <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+              <div className="bg-white dark:bg-slate-900 border border-neutral-150 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col gap-3.5">
+                <div className="flex items-center gap-3 border-b border-neutral-100 dark:border-slate-800 pb-3">
                   <div className="w-10 h-10 bg-[#3B82F6] text-white rounded-full flex items-center justify-center font-extrabold shadow-sm">
                     {profile.displayName?.[0] || user.displayName?.[0] || 'U'}
                   </div>
                   <div>
-                    <h3 className="text-xs font-black text-neutral-800">{profile.displayName || user.displayName}</h3>
-                    <p className="text-[10px] text-neutral-400">{user.email}</p>
+                    <h3 className="text-xs font-black text-neutral-800 dark:text-white">{profile.displayName || user.displayName}</h3>
+                    <p className="text-[10px] text-neutral-400 dark:text-slate-400">{user.email}</p>
                   </div>
                 </div>
 
                 {/* Body target parameters */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div className="bg-neutral-50 p-2.5 rounded-xl border border-neutral-150/70 text-center">
-                    <span className="text-[10px] text-neutral-400 font-bold">목표 칼로리</span>
-                    <p className="text-sm font-extrabold text-slate-950 font-mono mt-0.5">{profile.targetCalories} kcal</p>
+                  <div className="bg-neutral-50 dark:bg-slate-800 p-2.5 rounded-xl border border-neutral-150/70 dark:border-slate-700 text-center">
+                    <span className="text-[10px] text-neutral-400 dark:text-slate-400 font-bold">목표 칼로리</span>
+                    <p className="text-sm font-extrabold text-slate-950 dark:text-white font-mono mt-0.5">{profile.targetCalories} kcal</p>
                   </div>
-                  <div className="bg-neutral-50 p-2.5 rounded-xl border border-neutral-150/70 text-center">
-                    <span className="text-[10px] text-neutral-400 font-bold">목표 몸무게</span>
-                    <p className="text-sm font-extrabold text-slate-950 font-mono mt-0.5">{profile.targetWeight} kg</p>
+                  <div className="bg-neutral-50 dark:bg-slate-800 p-2.5 rounded-xl border border-neutral-150/70 dark:border-slate-700 text-center">
+                    <span className="text-[10px] text-neutral-400 dark:text-slate-400 font-bold">목표 몸무게</span>
+                    <p className="text-sm font-extrabold text-slate-950 dark:text-white font-mono mt-0.5">{profile.targetWeight} kg</p>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <h4 className="text-[10px] text-neutral-400 font-black tracking-wider uppercase mb-0.5">매주 권장할 영양 매크로 타겟</h4>
-                  <div className="flex gap-4 items-center justify-between text-xs font-mono font-bold bg-neutral-50 p-2.5 border border-neutral-150 rounded-xl">
+                  <h4 className="text-[10px] text-neutral-400 dark:text-slate-400 font-black tracking-wider uppercase mb-0.5">매주 권장할 영양 매크로 타겟</h4>
+                  <div className="flex gap-4 items-center justify-between text-xs font-mono font-bold bg-neutral-50 dark:bg-slate-800 p-2.5 border border-neutral-150 dark:border-slate-700 rounded-xl">
                     <div className="text-center flex-1">
-                      <p className="text-[9px] font-sans font-extrabold text-neutral-400">탄 (Carbs)</p>
-                      <p className="text-[11px] text-neutral-700 mt-0.5">{profile.targetCarbs}g</p>
+                      <p className="text-[9px] font-sans font-extrabold text-neutral-400 dark:text-slate-400">탄 (Carbs)</p>
+                      <p className="text-[11px] text-neutral-700 dark:text-white mt-0.5">{profile.targetCarbs}g</p>
                     </div>
-                    <div className="text-center flex-1 border-x border-neutral-200">
-                      <p className="text-[9px] font-sans font-extrabold text-neutral-400">단 (Protein)</p>
-                      <p className="text-[11px] text-neutral-700 mt-0.5">{profile.targetProtein}g</p>
+                    <div className="text-center flex-1 border-x border-neutral-200 dark:border-slate-700">
+                      <p className="text-[9px] font-sans font-extrabold text-neutral-400 dark:text-slate-400">단 (Protein)</p>
+                      <p className="text-[11px] text-neutral-700 dark:text-white mt-0.5">{profile.targetProtein}g</p>
                     </div>
                     <div className="text-center flex-1">
-                      <p className="text-[9px] font-sans font-extrabold text-neutral-400">지 (Fat)</p>
-                      <p className="text-[11px] text-neutral-700 mt-0.5">{profile.targetFat}g</p>
+                      <p className="text-[9px] font-sans font-extrabold text-neutral-400 dark:text-slate-400">지 (Fat)</p>
+                      <p className="text-[11px] text-neutral-700 dark:text-white mt-0.5">{profile.targetFat}g</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-neutral-100 p-3 rounded-xl text-neutral-500 font-medium text-[10.5px] leading-4.5 flex items-start gap-1.5 border border-neutral-200">
-                  <Info className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0 mt-0.5" />
+                <div className="bg-neutral-100 dark:bg-slate-800 p-3 rounded-xl text-neutral-500 dark:text-slate-300 font-medium text-[10.5px] leading-4.5 flex items-start gap-1.5 border border-neutral-200 dark:border-slate-700">
+                  <Info className="w-3.5 h-3.5 text-neutral-400 dark:text-slate-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    본 다이어트 영양 수치는 인바디 검출 값에 대한 <strong className="text-neutral-700">Katch-McArdle 방정식</strong>을 최우선으로 사용하여 근육 보존 계수를 극대화한 개인 맞춤식 분할입니다.
+                    본 다이어트 영양 수치는 인바디 검출 값에 대한 <strong className="text-neutral-700 dark:text-white">Katch-McArdle 방정식</strong>을 최우선으로 사용하여 근육 보존 계수를 극대화한 개인 맞춤식 분할입니다.
                   </div>
                 </div>
 

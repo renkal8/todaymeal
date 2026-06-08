@@ -66,72 +66,74 @@ export default function NumberAdjuster({
   };
 
   return (
-    <div className="flex flex-col p-3 bg-white border border-[#E2E8F0] dark:bg-slate-800 dark:border-slate-700 rounded-2xl shadow-xs transition-all w-full">
+    <div className="flex flex-col p-3 bg-white border border-[#E2E8F0] rounded-2xl shadow-xs transition-all w-full">
       <div className="flex justify-between items-center mb-2">
-        {label && <span className="text-[11px] font-bold text-[#64748B] dark:text-neutral-400 tracking-tight">{label}</span>}
-        <div className="flex items-baseline">
+        {label && <span className="text-[12px] font-bold text-[#64748B] tracking-tight">{label}</span>}
+        <div className="flex items-baseline bg-[#F8FAFC] border border-[#E2E8F0] py-1 px-2 rounded-lg">
           <input
             type="number"
             inputMode="decimal"
             value={localValue}
             onChange={handleInputChange}
             onBlur={handleBlur}
-            className="w-16 text-right text-base font-black text-[#3B82F6] bg-transparent outline-none focus:bg-[#EFF6FF] dark:focus:bg-slate-700 rounded transition-colors"
+            className="w-16 text-right text-base font-black text-[#3B82F6] bg-transparent outline-none rounded transition-colors"
           />
-          <span className="text-[11px] font-bold text-[#94A3B8] ml-1">{unit}</span>
+          <span className="text-[12px] font-bold text-[#94A3B8] ml-1">{unit}</span>
         </div>
       </div>
 
-      <div className="flex gap-1.5 w-full">
-        <button
-          type="button"
-          onClick={() => handleAdjust(-10)}
-          className="flex-1 h-10 flex items-center justify-center text-[13px] font-extrabold text-slate-500 bg-[#F1F5F9] dark:bg-slate-700 hover:bg-[#E2E8F0] dark:hover:bg-slate-600 rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-        >
-          -10
-        </button>
-        <button
-          type="button"
-          onClick={() => handleAdjust(stepDecimal > 0 ? -1 : -1)}
-          className="flex-1 h-10 flex items-center justify-center text-[13px] font-extrabold text-slate-500 bg-[#F1F5F9] dark:bg-slate-700 hover:bg-[#E2E8F0] dark:hover:bg-slate-600 rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-        >
-          -1
-        </button>
-        
-        {stepDecimal > 0 && (
+      <div className="flex flex-col gap-1.5 w-full">
+        <div className="flex gap-1.5 w-full">
           <button
             type="button"
-            onClick={() => handleAdjust(-0.1)}
-            className="flex-1 h-10 flex items-center justify-center text-[13px] font-extrabold text-slate-500 bg-[#F1F5F9] dark:bg-slate-700 hover:bg-[#E2E8F0] dark:hover:bg-slate-600 rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+            onClick={() => handleAdjust(-10)}
+            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
           >
-            -0.1
+            -10
           </button>
-        )}
-        
-        {stepDecimal > 0 && (
           <button
             type="button"
-            onClick={() => handleAdjust(0.1)}
-            className="flex-1 h-10 flex items-center justify-center text-[13px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] dark:bg-blue-900/40 hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+            onClick={() => handleAdjust(-1)}
+            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
           >
-            +0.1
+            -1
           </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => handleAdjust(1)}
-          className="flex-1 h-10 flex items-center justify-center text-[13px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] dark:bg-blue-900/40 hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-        >
-          +1
-        </button>
-        <button
-          type="button"
-          onClick={() => handleAdjust(10)}
-          className="flex-1 h-10 flex items-center justify-center text-[13px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] dark:bg-blue-900/40 hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
-        >
-          +10
-        </button>
+          {stepDecimal > 0 && (
+            <button
+              type="button"
+              onClick={() => handleAdjust(-0.1)}
+              className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-slate-500 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+            >
+              -0.1
+            </button>
+          )}
+        </div>
+        
+        <div className="flex gap-1.5 w-full">
+          {stepDecimal > 0 && (
+            <button
+              type="button"
+              onClick={() => handleAdjust(0.1)}
+              className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+            >
+              +0.1
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleAdjust(1)}
+            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+          >
+            +1
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAdjust(10)}
+            className="flex-1 h-11 flex items-center justify-center text-[14px] font-extrabold text-[#3B82F6] bg-[#EFF6FF] hover:bg-[#DBEAFE] rounded-xl active:scale-95 transition-all outline-none touch-manipulation cursor-pointer"
+          >
+            +10
+          </button>
+        </div>
       </div>
     </div>
   );
