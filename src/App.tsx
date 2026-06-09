@@ -20,7 +20,6 @@ import TrendChart from "./components/TrendChart";
 import NumberAdjuster from "./components/NumberAdjuster";
 import CopyMealsModal from "./components/CopyMealsModal";
 import FastingTracker from "./components/FastingTracker";
-import EmojiEditor from "./components/EmojiEditor";
 
 // Lucide Icons
 import {
@@ -210,13 +209,20 @@ function MealGroupItem({
                 className="flex justify-between items-center bg-white dark:bg-slate-900 border border-[#F1F5F9] dark:border-slate-800/50 rounded-xl p-3 shadow-xs hover:border-[#E2E8F0] dark:hover:border-slate-700 transition-colors"
               >
                 <div className="min-w-0 flex-1 flex items-start gap-2">
-                  <EmojiEditor
-                    initialEmoji={log.icon || "✨"}
-                    onSave={async (newEmoji) => {
-                      if (user) {
+                  <span
+                    className="text-base select-none mt-0.5 cursor-pointer hover:scale-110 transition-transform block"
+                    title="아이콘 변경"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const currentIcon = log.icon || "✨";
+                      const newEmoji = window.prompt(
+                        "음식 아이콘 이모지를 수정하세요 (예: 🥩, 🍎, 🍚):",
+                        currentIcon,
+                      );
+                      if (newEmoji && newEmoji.trim().length > 0 && user) {
                         try {
                           await dbService.updateFoodLog(user.uid, log.id, {
-                            icon: newEmoji,
+                            icon: newEmoji.trim().charAt(0),
                           });
                           loadUserData(user.uid);
                         } catch (err) {
@@ -224,8 +230,9 @@ function MealGroupItem({
                         }
                       }
                     }}
-                    className="mt-0.5"
-                  />
+                  >
+                    {log.icon || "✨"}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-extrabold text-[#1E293B] dark:text-neutral-200 truncate pr-2">
                       {log.name}

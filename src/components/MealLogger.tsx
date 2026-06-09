@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { FOOD_PRESETS, CATEGORY_LABELS } from "../data/foodPresets";
 import { FoodPreset, FoodLog, MealRoutine } from "../types";
 import { getEmojiForFoodName } from "../utils/emojiHelper";
-import EmojiEditor from "./EmojiEditor";
 import { useDragScroll } from "../utils/useDragScroll";
 import NumberAdjuster from "./NumberAdjuster";
 import {
@@ -1012,16 +1011,29 @@ export default function MealLogger({
           <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
             <div className="flex items-center gap-1.5 w-full justify-between">
               <div className="flex items-center gap-1.5 min-w-0">
-                <EmojiEditor
-                  initialEmoji={
-                    customEmoji ||
+                <span
+                  className="text-base flex-shrink-0 cursor-pointer hover:scale-110 transition-transform block"
+                  title="아이콘 이모지 변경"
+                  onClick={() => {
+                    const currentIcon =
+                      customEmoji ||
+                      (activePreset
+                        ? activePreset.icon
+                        : getEmojiForFoodName(customName));
+                    const newEmoji = window.prompt(
+                      "음식 아이콘 이모지를 설정하세요 (예: 🥩, 🍎):",
+                      currentIcon,
+                    );
+                    if (newEmoji && newEmoji.trim().length > 0) {
+                      setCustomEmoji(newEmoji.trim().charAt(0));
+                    }
+                  }}
+                >
+                  {customEmoji ||
                     (activePreset
                       ? activePreset.icon
-                      : getEmojiForFoodName(customName))
-                  }
-                  onSave={(newEmoji) => setCustomEmoji(newEmoji)}
-                  className="flex-shrink-0"
-                />
+                      : getEmojiForFoodName(customName))}
+                </span>
                 <span className="text-xs font-black text-[#1E293B] truncate">
                   {activePreset
                     ? `${activePreset.name} 추가하기`
