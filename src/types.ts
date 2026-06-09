@@ -19,6 +19,8 @@ export interface UserProfile {
   weeklyUpdateEnabled?: boolean;
   weeklyUpdateDay?: number; // 0 for Sunday, 1 for Monday, etc.
   weeklyWeightLossTarget?: number; // in grams per week (e.g. 500 for standard)
+  dietStartDate?: string;
+  dietDurationWeeks?: number;
   updatedAt: string;
 }
 

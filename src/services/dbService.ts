@@ -288,5 +288,45 @@ export const dbService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
     }
+  },
+
+  // --- RECENT FOODS OPERATIONS ---
+  async getRecentFoods(userId: string): Promise<any[]> {
+    const path = `users/${userId}/recentFoods`;
+    try {
+      const colRef = collection(db, 'users', userId, 'recentFoods');
+      const q = query(colRef, orderBy('updatedAt', 'desc'), limit(100));
+      const querySnapshot = await getDocs(q);
+      const items: any[] = [];
+      querySnapshot.forEach(docSnap => {
+        items.push({ ...docSnap.data(), id: docSnap.id });
+      });
+      return items;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  },
+
+  async saveRecentFood(userId: string, food: any): Promise<void> {
+    const path = `users/${userId}/recentFoods/${food.id}`;
+    try {
+      const docRef = doc(db, 'users', userId, 'recentFoods', food.id);
+      await setDoc(docRef, {
+        ...food,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  async deleteRecentFood(userId: string, foodId: string): Promise<void> {
+    const path = `users/${userId}/recentFoods/${foodId}`;
+    try {
+      const docRef = doc(db, 'users', userId, 'recentFoods', foodId);
+      await deleteDoc(docRef);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   }
 };

@@ -34,6 +34,7 @@ export default function ProfileForm({
   const [activityLevel, setActivityLevel] = useState<UserProfile['activityLevel']>(initialProfile?.activityLevel || 'light');
   const [goalType, setGoalType] = useState<UserProfile['goalType']>(initialProfile?.goalType || 'cut');
   const [weeklyWeightLossTarget, setWeeklyWeightLossTarget] = useState<number>(initialProfile?.weeklyWeightLossTarget ?? 500);
+  const [dietDurationWeeks, setDietDurationWeeks] = useState<number>(initialProfile?.dietDurationWeeks || 8);
 
   // Manual Macro & Calorie Tracking
   const [manualMode, setManualMode] = useState<boolean>(false);
@@ -217,6 +218,8 @@ export default function ProfileForm({
       activityLevel,
       goalType,
       weeklyWeightLossTarget,
+      dietDurationWeeks,
+      dietStartDate: initialProfile?.dietStartDate || new Date().toISOString(),
       targetCalories: liveCalories,
       targetCarbs: liveCarbs,
       targetProtein: liveProtein,
@@ -328,6 +331,24 @@ export default function ProfileForm({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Diet Duration */}
+        <div className="flex flex-col gap-3 bg-neutral-50 dark:bg-slate-800 p-4 rounded-2xl border border-neutral-200 dark:border-slate-700">
+          <span className="text-xs font-extrabold text-[#1E293B] dark:text-slate-200">
+            ⏳ 다이어트 진행 기간
+          </span>
+          <select
+            value={dietDurationWeeks}
+            onChange={(e) => setDietDurationWeeks(Number(e.target.value))}
+            className="w-full text-xs h-10 border border-neutral-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 px-3 font-semibold text-neutral-800 dark:text-white focus:outline-none focus:border-[#3B82F6] cursor-pointer"
+          >
+            {Array.from({ length: 52 }, (_, i) => i + 1).map((weeks) => (
+              <option key={weeks} value={weeks}>
+                {weeks}주
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Weekly Weight Loss Pace Selector (only for cut) */}

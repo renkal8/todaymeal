@@ -109,6 +109,11 @@ service cloud.firestore {
       match /fasting/{fastingId} {
         allow get, list, create, update, delete: if isOwner(userId);
       }
+
+      // 5. Sub-collection: Recent or custom food presets
+      match /recentFoods/{recentFoodId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+      }
     }
   }
 }

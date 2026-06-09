@@ -68,6 +68,25 @@
         "status": { "type": "string", "enum": ["active", "completed"], "description": "Fasting status" }
       },
       "required": ["userId", "startTime", "targetDuration", "status"]
+    },
+    "RecentFood": {
+      "title": "RecentFood",
+      "description": "User's custom or recently logged foods to show in the fast preset buttons",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique key or preset ID" },
+        "name": { "type": "string", "description": "Name of the food" },
+        "category": { "type": "string", "description": "Main food category" },
+        "icon": { "type": "string", "description": "Emoji icon" },
+        "baseCalories": { "type": "number", "description": "Base calories in kcal" },
+        "baseCarbs": { "type": "number", "description": "Base carbohydrates in grams" },
+        "baseProtein": { "type": "number", "description": "Base protein in grams" },
+        "baseFat": { "type": "number", "description": "Base fat in grams" },
+        "servingUnit": { "type": "string", "description": "Unit (e.g. g or piece)" },
+        "baseGrams": { "type": "number", "description": "Base reference grams weight" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last time used or custom added" }
+      },
+      "required": ["id", "name", "category", "baseCalories", "baseGrams"]
     }
   },
   "firestore": {
@@ -86,6 +105,10 @@
     "users/{userId}/fasting/{fastingId}": {
       "schema": { "$ref": "#/entities/FastingLog" },
       "description": "Fasting timers and historical fasting logged by user"
+    },
+    "users/{userId}/recentFoods/{recentFoodId}": {
+      "schema": { "$ref": "#/entities/RecentFood" },
+      "description": "Recently logged or custom saved food items for the food select panel"
     }
   }
 }
