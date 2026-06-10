@@ -404,6 +404,34 @@ Query: "${stripped}"`;
   return localMatch;
 }
 
+// 서버의 현재 외부 공인 IP를 조회 (여러 서비스 순차 시도)
+async function getServerPublicIP(): Promise<string> {
+  const services = [
+    "https://api.ipify.org?format=json",
+    "https://api4.my-ip.io/ip.json",
+    "https://checkip.amazonaws.com",
+  ];
+  for (const url of services) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+      // JSON 형태({ "ip": "..." }) 또는 plain text 모두 처리
+      try {
+        const json = JSON.parse(text);
+        const ip = json.ip || json.IPv4 || json.query;
+        if (ip) return ip.trim();
+      } catch {
+        const plain = text.trim();
+        if (plain) return plain;
+      }
+    } catch {
+      // 다음 서비스로
+    }
+  }
+  return "IP 조회 실패";
+}
+
 async function getFatSecretToken(): Promise<string> {
   // Platform secrets and environment variables prioritized
   const clientId = (process.env.FATSECRET_CLIENT_ID || process.env.VITE_FATSECRET_CLIENT_ID || "").trim();
@@ -431,8 +459,14 @@ async function getFatSecretToken(): Promise<string> {
 
   if (!response.ok) {
     const errText = await response.text().catch(() => response.statusText);
-    // Clear potentially corrupted cache
     cachedToken = null;
+
+    // IP 제한 에러인 경우 현재 서버 IP를 함께 알려줌
+    if (response.status === 403 || errText.includes("Invalid IP") || errText.includes("ip_restriction")) {
+      const serverIP = await getServerPublicIP();
+      throw new Error(`Invalid IP address detected. SERVER_IP=${serverIP}`);
+    }
+
     throw new Error(`Failed to obtain token: ${response.status} ${errText}`);
   }
 
@@ -827,7 +861,7 @@ async function startServer() {
       console.error("/api/food/barcode error:", err);
       res.status(500).json({ error: err.message || "Internal server error" });
     }
-  });
+  }); 
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

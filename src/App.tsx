@@ -1110,6 +1110,32 @@ export default function App() {
       ? generateWeeklyFeedback(profile, filteredRecords)
       : null;
 
+  // ✅ useMemo는 반드시 early return 이전에 위치해야 함 (React 훅 규칙)
+  const calendarGrid = useMemo(() => {
+    return Array.from({ length: 42 }).map((_, i) => {
+      const firstDay = new Date(
+        calendarViewDate.getFullYear(),
+        calendarViewDate.getMonth(),
+        1,
+      ).getDay();
+      const daysInMonth = new Date(
+        calendarViewDate.getFullYear(),
+        calendarViewDate.getMonth() + 1,
+        0,
+      ).getDate();
+
+      const dayNum = i - firstDay + 1;
+      const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
+      const dStr = isCurrentMonth
+        ? `${calendarViewDate.getFullYear()}-${String(calendarViewDate.getMonth() + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
+        : "";
+      const isSelected = isCurrentMonth && selectedDate === dStr;
+      const cals = isCurrentMonth ? monthlySummary[dStr] || 0 : 0;
+
+      return { key: i, dayNum, isCurrentMonth, dStr, isSelected, cals };
+    });
+  }, [calendarViewDate, selectedDate, monthlySummary]);
+
   if (!authReady) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100">
@@ -1202,31 +1228,6 @@ export default function App() {
       </div>
     );
   }
-
-  const calendarGrid = useMemo(() => {
-    return Array.from({ length: 42 }).map((_, i) => {
-      const firstDay = new Date(
-        calendarViewDate.getFullYear(),
-        calendarViewDate.getMonth(),
-        1,
-      ).getDay();
-      const daysInMonth = new Date(
-        calendarViewDate.getFullYear(),
-        calendarViewDate.getMonth() + 1,
-        0,
-      ).getDate();
-
-      const dayNum = i - firstDay + 1;
-      const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
-      const dStr = isCurrentMonth
-        ? `${calendarViewDate.getFullYear()}-${String(calendarViewDate.getMonth() + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
-        : "";
-      const isSelected = isCurrentMonth && selectedDate === dStr;
-      const cals = isCurrentMonth ? monthlySummary[dStr] || 0 : 0;
-
-      return { key: i, dayNum, isCurrentMonth, dStr, isSelected, cals };
-    });
-  }, [calendarViewDate, selectedDate, monthlySummary]);
 
   return (
     <div className="min-h-screen bg-slate-150 py-0 md:py-8">

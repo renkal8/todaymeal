@@ -113,7 +113,14 @@ service cloud.firestore {
       // 5. Sub-collection: Recent or custom food presets
       match /recentFoods/{recentFoodId} {
         allow get, list, create, update, delete: if isOwner(userId);
+    
       }
+
+      // 6. subprofiles 규칙 추가
+      match /subprofiles/{subProfileId} {
+        allow get, list, create, update, delete: if isOwner(userId);
+  }
+
     }
   }
 }

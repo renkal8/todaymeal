@@ -103,7 +103,8 @@ export const dbService = {
       });
       return list;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
+          console.warn('getSubProfiles failed, returning empty:', error); // ✅ throw 대신 warn
+    return []; // ✅ 빈 배열 반환으로 앱 안 터짐
     }
   },
 
