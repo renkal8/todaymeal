@@ -861,7 +861,7 @@ async function startServer() {
       console.error("/api/food/barcode error:", err);
       res.status(500).json({ error: err.message || "Internal server error" });
     }
-  }); 
+  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

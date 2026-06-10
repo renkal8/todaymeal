@@ -534,7 +534,9 @@ export default function MealLogger({
           "FatSecret API 키가 설정되지 않았습니다. (.env.example 확인)",
         );
       } else if (err.message && (err.message.includes("Invalid IP address detected") || err.message.includes("IP 제한"))) {
-        setFatSecretError("FatSecret 관리자 콘솔에서 해당 키의 IP 제한을 해제해주세요.");
+        const ipMatch = err.message.match(/SERVER_IP=([^\s]+)/);
+        const ipInfo = ipMatch ? ` 현재 서버 IP: ${ipMatch[1]}` : "";
+        setFatSecretError(`FatSecret IP 제한 오류 — FatSecret 콘솔에 이 IP를 추가해주세요.${ipInfo}`);
       } else if (err.message === "Failed to fetch") {
         setFatSecretError(
           "네트워크 오류 (또는 서버 재시작 중)입니다. 다시 시도해주세요.",
