@@ -1,11 +1,11 @@
 import express from "express";
+import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 import Papa from "papaparse";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
-const FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token";
 const FATSECRET_API_URL = "https://platform.fatsecret.com/rest/server.api";
 
 // Local Food DB Load
@@ -164,8 +164,6 @@ const ai = new GoogleGenAI({
   }
 });
 
-let cachedToken: string | null = null;
-let tokenExpiryTime: number = 0;
 
 // Regular expression to detect Korean characters
 function hasKorean(text: string): boolean {
@@ -432,49 +430,49 @@ async function getServerPublicIP(): Promise<string> {
   return "IP 조회 실패";
 }
 
-async function getFatSecretToken(): Promise<string> {
-  // Platform secrets and environment variables prioritized
-  const clientId = (process.env.FATSECRET_CLIENT_ID || process.env.VITE_FATSECRET_CLIENT_ID || "").trim();
-  const clientSecret = (process.env.FATSECRET_CLIENT_SECRET || process.env.VITE_FATSECRET_CLIENT_SECRET || "").trim();
+// OAuth 1.0 서명 생성 — IP 화이트리스트 불필요
+function buildOAuth1Header(method: string, url: string, extraParams: Record<string, string> = {}): string {
+  const consumerKey = (process.env.FATSECRET_CONSUMER_KEY || process.env.VITE_FATSECRET_CLIENT_ID || "").trim();
+  const consumerSecret = (process.env.FATSECRET_CONSUMER_SECRET || process.env.VITE_FATSECRET_CLIENT_SECRET || "").trim();
 
-  if (!clientId || !clientSecret) {
-    throw new Error("FatSecret API credentials are not set in environment variables. FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set.");
+  if (!consumerKey || !consumerSecret) {
+    throw new Error("credentials are not set");
   }
 
-  // Force cache bypass if there was a previous error that got stuck or expired
-  if (cachedToken && Date.now() < tokenExpiryTime) {
-    return cachedToken;
-  }
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: crypto.randomBytes(16).toString("hex"),
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: String(Math.floor(Date.now() / 1000)),
+    oauth_version: "1.0",
+    ...extraParams,
+  };
 
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-  
-  const response = await fetch(FATSECRET_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: 'grant_type=client_credentials&scope=basic'
-  });
+  // 서명 베이스 문자열 생성
+  const allParams = { ...oauthParams };
+  const sortedParams = Object.keys(allParams)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(allParams[k])}`)
+    .join("&");
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => response.statusText);
-    cachedToken = null;
+  const baseString = [
+    method.toUpperCase(),
+    encodeURIComponent(url),
+    encodeURIComponent(sortedParams),
+  ].join("&");
 
-    // IP 제한 에러인 경우 현재 서버 IP를 함께 알려줌
-    if (response.status === 403 || errText.includes("Invalid IP") || errText.includes("ip_restriction")) {
-      const serverIP = await getServerPublicIP();
-      throw new Error(`Invalid IP address detected. SERVER_IP=${serverIP}`);
-    }
+  const signingKey = `${encodeURIComponent(consumerSecret)}&`;
+  const signature = crypto.createHmac("sha1", signingKey).update(baseString).digest("base64");
 
-    throw new Error(`Failed to obtain token: ${response.status} ${errText}`);
-  }
+  oauthParams["oauth_signature"] = signature;
 
-  const data = await response.json();
-  cachedToken = data.access_token;
-  tokenExpiryTime = Date.now() + (data.expires_in - 300) * 1000;
-  
-  return cachedToken!;
+  const headerValue =
+    "OAuth " +
+    Object.keys(oauthParams)
+      .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
+      .join(", ");
+
+  return headerValue;
 }
 
 async function startServer() {
@@ -532,15 +530,13 @@ async function startServer() {
         return res.status(400).json({ error: "Missing barcode parameter" });
       }
 
-      const token = await getFatSecretToken();
-      
-      let searchUrl = `${FATSECRET_API_URL}?method=food.find_id_for_barcode&barcode=${encodeURIComponent(barcode)}&format=json`;
+      const barcodeApiUrl = FATSECRET_API_URL;
+      const barcodeParams = { method: "food.find_id_for_barcode", barcode: encodeURIComponent(barcode), format: "json" };
+      const searchUrl = `${barcodeApiUrl}?method=food.find_id_for_barcode&barcode=${encodeURIComponent(barcode)}&format=json`;
       
       let response = await fetch(searchUrl, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': buildOAuth1Header('GET', barcodeApiUrl, { method: "food.find_id_for_barcode", barcode, format: "json" }) }
       });
 
       if (!response.ok) {
@@ -550,12 +546,11 @@ async function startServer() {
       let data = await response.json();
       
       if (data && data.food_id && data.food_id.value) {
-         // Found ID for barcode, now get food details
          const foodId = data.food_id.value;
          const getUrl = `${FATSECRET_API_URL}?method=food.get.v3&food_id=${foodId}&format=json&region=KR&language=ko`;
          let getRes = await fetch(getUrl, {
            method: 'GET',
-           headers: { 'Authorization': `Bearer ${token}` }
+           headers: { 'Authorization': buildOAuth1Header('GET', FATSECRET_API_URL, { method: "food.get.v3", food_id: foodId, format: "json", region: "KR", language: "ko" }) }
          });
          if (getRes.ok) {
              let getData = await getRes.json();
@@ -579,15 +574,13 @@ async function startServer() {
         return res.status(400).json({ error: "Missing query parameter" });
       }
 
-      const token = await getFatSecretToken();
-      
-      let searchUrl = `${FATSECRET_API_URL}?method=foods.search&search_expression=${encodeURIComponent(originalQuery)}&format=json&region=KR&language=ko`;
-      
+      const searchApiUrl = FATSECRET_API_URL;
+      const searchParams = { method: "foods.search", search_expression: originalQuery, format: "json", region: "KR", language: "ko" };
+      const searchUrl = `${searchApiUrl}?method=foods.search&search_expression=${encodeURIComponent(originalQuery)}&format=json&region=KR&language=ko`;
+
       let response = await fetch(searchUrl, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': buildOAuth1Header('GET', searchApiUrl, searchParams) }
       });
 
       if (!response.ok) {
