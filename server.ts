@@ -1,10 +1,158 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
+import Papa from "papaparse";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
 const FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token";
 const FATSECRET_API_URL = "https://platform.fatsecret.com/rest/server.api";
+
+// Local Food DB Load
+interface LocalFoodItem {
+  id: string; // generate from index
+  name: string;
+  serving_desc: string;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  weight_g: number;
+}
+let localFoodsData: LocalFoodItem[] = [];
+
+function getRealisticServingWeight(name: string, total_weight: number): number {
+  if (total_weight <= 350) {
+    return total_weight > 0 ? total_weight : 100;
+  }
+  const nameLower = name.toLowerCase();
+  if (nameLower.includes("찌개") || nameLower.includes("국") || nameLower.includes("탕") || nameLower.includes("전골") || nameLower.includes("해장국")) {
+    return 350; // standard soup/stew portion
+  }
+  if (nameLower.includes("죽") || nameLower.includes("카레") || nameLower.includes("짜장") || nameLower.includes("하이라이스")) {
+    return 300;
+  }
+  if (nameLower.includes("볶음밥") || nameLower.includes("덮밥") || nameLower.includes("비빔밥") || nameLower.includes("컵밥")) {
+    return 250; // standard meal portion
+  }
+  if (nameLower.includes("떡볶이") || nameLower.includes("면") || nameLower.includes("우동") || nameLower.includes("라면") || nameLower.includes("소바") || nameLower.includes("국수") || nameLower.includes("짜장면") || nameLower.includes("짬뽕") || nameLower.includes("파스타")) {
+    return 350;
+  }
+  if (nameLower.includes("만두") || nameLower.includes("치킨") || nameLower.includes("피자") || nameLower.includes("돈가스") || nameLower.includes("족발") || nameLower.includes("보쌈") || nameLower.includes("갈비")) {
+    return 200;
+  }
+  if (nameLower.includes("식빵") || nameLower.includes("모닝빵")) {
+    return 100;
+  }
+  if (nameLower.includes("과자") || nameLower.includes("쿠키") || nameLower.includes("칩") || nameLower.includes("스낵")) {
+    return 50;
+  }
+  return 200;
+}
+
+try {
+  const csvFilePath = path.join(process.cwd(), "src", "foods.csv");
+  if (fs.existsSync(csvFilePath)) {
+    const csvContent = fs.readFileSync(csvFilePath, "utf-8");
+    Papa.parse(csvContent, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        // Group the items by normalized name to eliminate duplicates
+        const groups: { [key: string]: { name: string; items: any[] } } = {};
+        
+        results.data.forEach((row: any) => {
+          const rawName = (row["식품명"] || "").trim();
+          if (!rawName) return;
+          
+          const normKey = rawName.toLowerCase().replace(/\s+/g, "");
+          if (!groups[normKey]) {
+            groups[normKey] = {
+              name: rawName,
+              items: []
+            };
+          }
+          groups[normKey].items.push(row);
+        });
+
+        // Loop over the groups and calculate realistic averaged values
+        const parsedList: LocalFoodItem[] = [];
+        let idx = 0;
+
+        Object.keys(groups).forEach((key) => {
+          const group = groups[key];
+          const count = group.items.length;
+          
+          let sum_ref_weight = 0;
+          let sum_total_weight = 0;
+          let sum_calories = 0;
+          let sum_protein = 0;
+          let sum_fat = 0;
+          let sum_carbs = 0;
+
+          group.items.forEach((row: any) => {
+            const ref_weight = parseFloat((row["영양성분함량기준량"] || "100").replace(/[^0-9.]/g, "")) || 100;
+            const total_weight = parseFloat((row["식품중량"] || "100").replace(/[^0-9.]/g, "")) || 100;
+            const calories = parseFloat(row["에너지(kcal)"]) || 0;
+            const protein = parseFloat(row["단백질(g)"]) || 0;
+            const fat = parseFloat(row["지방(g)"]) || 0;
+            const carbs = parseFloat(row["탄수화물(g)"]) || 0;
+
+            sum_ref_weight += ref_weight;
+            sum_total_weight += total_weight;
+            sum_calories += calories;
+            sum_protein += protein;
+            sum_fat += fat;
+            sum_carbs += carbs;
+          });
+
+          const avg_ref_weight = sum_ref_weight / count || 100;
+          const avg_total_weight = sum_total_weight / count || 100;
+          const avg_calories = sum_calories / count;
+          const avg_protein = sum_protein / count;
+          const avg_fat = sum_fat / count;
+          const avg_carbs = sum_carbs / count;
+
+          // Determine realistic single portion serving weight
+          const serving_weight = getRealisticServingWeight(group.name, avg_total_weight);
+          const multiplier = serving_weight / avg_ref_weight;
+
+          // Scale nutrients to realistic serving weight rather than 100g/ml standards
+          const scaled_calories = Math.round(avg_calories * multiplier * 10) / 10;
+          const scaled_protein = Math.round(avg_protein * multiplier * 100) / 100;
+          const scaled_fat = Math.round(avg_fat * multiplier * 100) / 100;
+          const scaled_carbs = Math.round(avg_carbs * multiplier * 100) / 100;
+
+          // Intuitively display portion description
+          let serving_desc = "";
+          if (avg_total_weight <= 350) {
+            serving_desc = `1회 제공량 (${Math.round(serving_weight)}g)`;
+          } else {
+            serving_desc = `1인분 (${Math.round(serving_weight)}g / 총 ${Math.round(avg_total_weight)}g)`;
+          }
+
+          parsedList.push({
+            id: `localdb-${idx++}`,
+            name: group.name,
+            serving_desc,
+            calories: scaled_calories,
+            protein: scaled_protein,
+            fat: scaled_fat,
+            carbs: scaled_carbs,
+            weight_g: Math.round(serving_weight)
+          });
+        });
+
+        localFoodsData = parsedList;
+        console.log(`Successfully consolidated and loaded ${localFoodsData.length} food items from local DB.`);
+      }
+    });
+  } else {
+    console.warn("foods.csv not found. Local offline search DB disabled.");
+  }
+} catch (err) {
+  console.error("Error loading local foods DB:", err);
+}
 
 // Initialize Gemini
 const ai = new GoogleGenAI({
@@ -240,7 +388,7 @@ Return ONLY the English search keywords with no surrounding punctuation, quotes,
 Query: "${stripped}"`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
     
@@ -257,13 +405,15 @@ Query: "${stripped}"`;
 }
 
 async function getFatSecretToken(): Promise<string> {
-  const clientId = (process.env.VITE_FATSECRET_CLIENT_ID || process.env.FATSECRET_CLIENT_ID || "").trim();
-  const clientSecret = (process.env.VITE_FATSECRET_CLIENT_SECRET || process.env.FATSECRET_CLIENT_SECRET || "").trim();
+  // Platform secrets and environment variables prioritized
+  const clientId = (process.env.FATSECRET_CLIENT_ID || process.env.VITE_FATSECRET_CLIENT_ID || "").trim();
+  const clientSecret = (process.env.FATSECRET_CLIENT_SECRET || process.env.VITE_FATSECRET_CLIENT_SECRET || "").trim();
 
   if (!clientId || !clientSecret) {
-    throw new Error("FatSecret API credentials are not set in environment variables. VITE_FATSECRET_CLIENT_ID and VITE_FATSECRET_CLIENT_SECRET must be set.");
+    throw new Error("FatSecret API credentials are not set in environment variables. FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set.");
   }
 
+  // Force cache bypass if there was a previous error that got stuck or expired
   if (cachedToken && Date.now() < tokenExpiryTime) {
     return cachedToken;
   }
@@ -281,6 +431,8 @@ async function getFatSecretToken(): Promise<string> {
 
   if (!response.ok) {
     const errText = await response.text().catch(() => response.statusText);
+    // Clear potentially corrupted cache
+    cachedToken = null;
     throw new Error(`Failed to obtain token: ${response.status} ${errText}`);
   }
 
@@ -297,6 +449,94 @@ async function startServer() {
 
   app.use(express.json());
 
+  // API to fetch foods from uploaded foods.csv
+  app.get("/api/localdb/search", (req, res) => {
+    try {
+      const q = (req.query.q as string || "").trim().toLowerCase();
+      if (!q) {
+        return res.json([]);
+      }
+      
+      const qTokens = q.split(" ").filter(t => t.length > 0);
+      
+      // Simple filter logic: find words in name
+      let matched = localFoodsData.filter(item => {
+         if (!item.name) return false;
+         const nameLower = item.name.toLowerCase();
+         // All tokens must match
+         return qTokens.every(t => nameLower.includes(t));
+      });
+      
+      // Sort: exact matches first, then shorter names first
+      matched.sort((a, b) => {
+         const aName = a.name.toLowerCase();
+         const bName = b.name.toLowerCase();
+         if (aName === q && bName !== q) return -1;
+         if (bName === q && aName !== q) return 1;
+         
+         const aStarts = aName.startsWith(q);
+         const bStarts = bName.startsWith(q);
+         if (aStarts && !bStarts) return -1;
+         if (bStarts && !aStarts) return 1;
+         
+         return a.name.length - b.name.length;
+      });
+      
+      // Return top 50
+      res.json(matched.slice(0, 50));
+    } catch (err: any) {
+      console.error("/api/localdb/search error:", err);
+      res.status(500).json({ error: err.message || "Internal server error" });
+    }
+  });
+
+  // API to fetch food by barcode
+  app.get("/api/fatsecret/barcode", async (req, res) => {
+    try {
+      const barcode = req.query.barcode as string;
+      if (!barcode) {
+        return res.status(400).json({ error: "Missing barcode parameter" });
+      }
+
+      const token = await getFatSecretToken();
+      
+      let searchUrl = `${FATSECRET_API_URL}?method=food.find_id_for_barcode&barcode=${encodeURIComponent(barcode)}&format=json`;
+      
+      let response = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: `FatSecret returned ${response.status}` });
+      }
+
+      let data = await response.json();
+      
+      if (data && data.food_id && data.food_id.value) {
+         // Found ID for barcode, now get food details
+         const foodId = data.food_id.value;
+         const getUrl = `${FATSECRET_API_URL}?method=food.get.v3&food_id=${foodId}&format=json&region=KR&language=ko`;
+         let getRes = await fetch(getUrl, {
+           method: 'GET',
+           headers: { 'Authorization': `Bearer ${token}` }
+         });
+         if (getRes.ok) {
+             let getData = await getRes.json();
+             return res.json(getData);
+         }
+      }
+      
+      // If not found or error, just return data (which might have error)
+      res.json(data);
+    } catch (err: any) {
+      console.error("/api/fatsecret/barcode error:", err);
+      res.status(500).json({ error: err.message || "Internal server error" });
+    }
+  });
+
   // API to fetch foods
   app.get("/api/fatsecret/search", async (req, res) => {
     try {
@@ -305,20 +545,26 @@ async function startServer() {
         return res.status(400).json({ error: "Missing query parameter" });
       }
 
-      let searchQuery = originalQuery;
-      let isTranslated = false;
-      // Intelligently check if query contains Korean; if so, translate to English for awesome match rates
-      if (hasKorean(originalQuery)) {
-        const translatedText = await translateFoodQuery(originalQuery);
-        if (translatedText && translatedText !== originalQuery) {
-          searchQuery = translatedText;
-          isTranslated = true;
+      const token = await getFatSecretToken();
+      
+      // Check if query contains Korean characters
+      const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(originalQuery);
+      let translatedQuery = originalQuery;
+
+      if (hasKorean) {
+        try {
+          const chatResponse = await ai.models.generateContent({
+             model: "gemini-2.5-flash",
+             contents: `Translate this Korean food name to a simple English product name suitable for a grocery database search. Return ONLY the English name, no conversational text. Input: ${originalQuery}`
+          });
+          translatedQuery = chatResponse?.text?.trim() || originalQuery;
+          console.log(`Translated FatSecret Query: "${originalQuery}" -> "${translatedQuery}"`);
+        } catch (e) {
+          console.error("Translation error:", e);
         }
       }
 
-      const token = await getFatSecretToken();
-      
-      let searchUrl = `${FATSECRET_API_URL}?method=foods.search&search_expression=${encodeURIComponent(searchQuery)}&format=json`;
+      let searchUrl = `${FATSECRET_API_URL}?method=foods.search&search_expression=${encodeURIComponent(translatedQuery)}&format=json`;
       
       let response = await fetch(searchUrl, {
         method: 'GET',
@@ -332,36 +578,295 @@ async function startServer() {
       }
 
       let data = await response.json();
-      
-      // FALLBACK SAFEGUARD: If translating returned 0 results, retry with original Korean query
-      const hasResults = data && data.foods && data.foods.food;
-      if (!hasResults && isTranslated) {
-        console.log(`[FatSecret API] Search with translated "${searchQuery}" returned 0 results. Retrying with original "${originalQuery}"`);
-        const fallbackUrl = `${FATSECRET_API_URL}?method=foods.search&search_expression=${encodeURIComponent(originalQuery)}&format=json`;
-        const fallbackResponse = await fetch(fallbackUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`
+
+      // Transiate result names back to Korean if original search was Korean
+      if (hasKorean && data && data.foods && data.foods.food) {
+        try {
+          let foodsArray = data.foods.food;
+          if (!Array.isArray(foodsArray)) foodsArray = [foodsArray];
+          
+          const namesList = foodsArray.map((f: any) => f.food_name).join("\n");
+          
+          const chatResponse = await ai.models.generateContent({
+             model: "gemini-2.5-flash",
+             contents: `Translate the following English food product names to Korean natively. Return exactly the same number of lines. Keep brand names as is or translate gracefully.\n\n${namesList}`
+          });
+          
+          const translatedNames = chatResponse?.text?.trim().split("\n") || [];
+          if (translatedNames.length === foodsArray.length) {
+            for (let i = 0; i < foodsArray.length; i++) {
+               foodsArray[i].food_name = translatedNames[i];
+            }
           }
-        });
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json();
-          if (fallbackData && fallbackData.foods && fallbackData.foods.food) {
-            data = fallbackData;
-            searchQuery = originalQuery;
-          }
+        } catch (e) {
+           console.error("Result translation error:", e);
         }
-      }
-      
-      // Let the client know the original and translated terms so it can be transparent
-      if (data && data.foods) {
-        data.translatedQuery = searchQuery;
-        data.originalQuery = originalQuery;
       }
 
       res.json(data);
     } catch (err: any) {
       console.error("/api/fatsecret/search error:", err);
+      res.status(500).json({ error: err.message || "Internal server error" });
+    }
+  });
+
+  // API for FoodQR
+  app.get("/api/foodqr/search", async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      if (!q) {
+        return res.status(400).json({ error: "Missing query parameter" });
+      }
+
+      const apiKey = (process.env.KOREA_FOOD_API_KEY || process.env.VITE_KOREA_FOOD_API_KEY || "").trim();
+      if (!apiKey) {
+        return res.json({
+          error: "credentials_not_set",
+          message:
+            "API 키가 설정되지 않았습니다. .env 파일에 KOREA_FOOD_API_KEY를 설정하세요.",
+        });
+      }
+
+      let url = `https://foodqr.kr/openapi/service/qr1008/F008?accessKey=${apiKey}&prdctNm=${encodeURIComponent(q)}&_type=json&numOfRows=30&pageNo=1`;
+      
+      let response = await fetch(url);
+      if (!response.ok) {
+        url = `https://foodqr.kr/openapi/service/qr1008/F008?accessKey=${encodeURIComponent(apiKey)}&prdctNm=${encodeURIComponent(q)}&_type=json&numOfRows=30&pageNo=1`;
+        response = await fetch(url);
+        if (!response.ok) {
+           console.log("FoodQR API fetch failed:", response.status, await response.text());
+           return res.json({ error: "auth_error", message: `푸드QR API 호출 에러: ${response.status}`});
+        }
+      }
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        return res.json({ error: "parse_error", message: "푸드QR API 응답 파싱 실패" });
+      }
+      res.json(data);
+    } catch (err: any) {
+       console.error("/api/foodqr/search error:", err);
+       res.json({ error: err.message });
+    }
+  });
+
+  // API for Ministry of Food and Drug Safety (식약처) nutrient search
+  app.get("/api/korea/search", async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      if (!q) {
+        return res.status(400).json({ error: "Missing query parameter" });
+      }
+
+      const apiKey = (process.env.KOREA_FOOD_API_KEY || process.env.VITE_KOREA_FOOD_API_KEY || "").trim();
+      if (!apiKey) {
+        return res.json({ 
+          error: "credentials_not_set",
+          message: "식약처 API 서비스 키가 설정되지 않았습니다.",
+          body: { items: [] }
+        });
+      }
+
+      let url = `https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02?serviceKey=${apiKey}&FOOD_NM_KR=${encodeURIComponent(q)}&type=json&numOfRows=100&pageNo=1`;
+      
+      let response = await fetch(url);
+      if (!response.ok) {
+        // Fallback to encodeURIComponent if the key was a decoding key
+        url = `https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02?serviceKey=${encodeURIComponent(apiKey)}&FOOD_NM_KR=${encodeURIComponent(q)}&type=json&numOfRows=100&pageNo=1`;
+        response = await fetch(url);
+        if (!response.ok) {
+           console.log("Korea API fetch failed:", response.status, await response.text());
+           return res.json({ 
+             error: "auth_error",
+             message: "식약처 API 호출 에러: 키가 올바르지 않거나 승인되지 않았습니다.",
+             body: { items: [] } 
+           });
+        }
+      }
+
+      const getFallbackUrl = (page: number) => {
+         return `https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02?serviceKey=${encodeURIComponent(apiKey)}&FOOD_NM_KR=${encodeURIComponent(q)}&type=json&numOfRows=100&pageNo=${page}`;
+      };
+
+      const pagesToFetch = [2, 3];
+      const additionalResponses = await Promise.all(pagesToFetch.map(p => fetch(getFallbackUrl(p)).catch(() => null)));
+      const additionalData = await Promise.all(additionalResponses.map(r => r && r.ok ? r.json() : null));
+
+      let data = await response.json();
+      
+      let allItems: any[] = [];
+      
+      const mergeItems = (d: any) => {
+         if (d && d.body && d.body.items) {
+           const items = d.body.items;
+           if (Array.isArray(items)) allItems.push(...items);
+           else if (items.item && Array.isArray(items.item)) allItems.push(...items.item);
+           else if (items.item) allItems.push(items.item);
+           else allItems.push(items);
+         }
+      };
+
+      mergeItems(data);
+      additionalData.forEach(d => {
+         if (d) mergeItems(d);
+      });
+
+      if (data.body) {
+         data.body.items = allItems;
+      }
+      
+      res.json(data);
+    } catch (err: any) {
+      console.error("/api/korea/search error:", err);
+      res.status(500).json({ error: err.message || "Internal server error" });
+    }
+  });
+
+  app.get("/api/korea/search-test", async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      const apiKey = (process.env.KOREA_FOOD_API_KEY || "").trim();
+      let url = `https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02?serviceKey=${apiKey}&FOOD_NM_KR=${encodeURIComponent(q)}&DB_GRP_NM=${encodeURIComponent('농·축산물')}&type=json&numOfRows=100&pageNo=1`;
+      let response = await fetch(url);
+      if (!response.ok) {
+        url = `https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02?serviceKey=${encodeURIComponent(apiKey)}&FOOD_NM_KR=${encodeURIComponent(q)}&DB_GRP_NM=${encodeURIComponent('농축산물')}&type=json&numOfRows=100&pageNo=1`;
+        response = await fetch(url);
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API for barcode lookup & automatic nutrient extraction
+  app.get("/api/food/barcode", async (req, res) => {
+    try {
+      const code = req.query.code as string;
+      if (!code) {
+        return res.status(400).json({ error: "Missing code parameter" });
+      }
+
+      // MOCK BARCODES FOR ZERO-CONFIG DEMO & PERFECT UX
+      const MOCK_BARCODES: Record<string, { name: string; brand: string; calories: number; carbs: number; protein: number; fat: number; servingSize: number }> = {
+        "8801043014794": { name: "신라면 120g", brand: "농심", calories: 500, carbs: 79, protein: 10, fat: 16, servingSize: 120 },
+        "8801007079210": { name: "CJ 햇반 210g", brand: "CJ제일제당", calories: 315, carbs: 70, protein: 5, fat: 1.5, servingSize: 210 },
+        "8801111197116": { name: "하림 닭가슴살 오리지널 110g", brand: "하림", calories: 125, carbs: 0, protein: 26, fat: 1.5, servingSize: 110 },
+        "8801056020027": { name: "몬스터 에너지 355ml", brand: "코카콜라", calories: 168, carbs: 41, protein: 0, fat: 0, servingSize: 355 },
+        "8801382124503": { name: "셀렉스 프로틴 드링크 125ml", brand: "매일유업", calories: 95, carbs: 9, protein: 8, fat: 2.5, servingSize: 125 },
+        "8801094013404": { name: "코카콜라 제로 250ml", brand: "코카콜라", calories: 0, carbs: 0, protein: 0, fat: 0, servingSize: 250 },
+      };
+
+      if (MOCK_BARCODES[code]) {
+        const p = MOCK_BARCODES[code];
+        return res.json({
+          source: "mock",
+          product: {
+            id: `barcode-${code}`,
+            name: p.name,
+            brand_name: p.brand,
+            calories: p.calories,
+            carbs: p.carbs,
+            protein: p.protein,
+            fat: p.fat,
+            serving_desc: `Per ${p.servingSize}g`,
+            serving_weight_grams: p.servingSize
+          }
+        });
+      }
+
+      const apiKey = (process.env.KOREA_FOOD_API_KEY || process.env.VITE_KOREA_FOOD_API_KEY || "").trim();
+      if (!apiKey) {
+        return res.json({
+          error: "credentials_not_set",
+          message: "식약처 API 서비스 키가 설정되지 않아서 데모용 바코드만 검색할 수 있습니다. (8801043014794, 8801007079210, 8801111197116, 8801094013404 등)",
+          product: null
+        });
+      }
+
+      let barcodeUrl = `http://apis.data.go.kr/1471000/FsnIdNmInfoService01/getFsnIdNmList01?serviceKey=${apiKey}&brcd_no=${encodeURIComponent(code)}&type=json`;
+      let response = await fetch(barcodeUrl);
+      if (!response.ok) {
+        barcodeUrl = `http://apis.data.go.kr/1471000/FsnIdNmInfoService01/getFsnIdNmList01?serviceKey=${encodeURIComponent(apiKey)}&brcd_no=${encodeURIComponent(code)}&type=json`;
+        response = await fetch(barcodeUrl);
+        if (!response.ok) {
+          console.log("Korea Barcode API failed:", response.status, await response.text());
+          return res.json({ 
+             error: "auth_error",
+             message: "식약처 API(바코드) 호출 에러: 키가 올바르지 않거나 승인되지 않았습니다.",
+             product: null 
+           });
+        }
+      }
+
+      const data = await response.json();
+      const items = data?.body?.items;
+      let itemsList: any[] = [];
+      if (items) {
+        if (Array.isArray(items)) itemsList = items;
+        else if (items.item && Array.isArray(items.item)) itemsList = items.item;
+        else if (items.item) itemsList = [items.item];
+        else itemsList = [items];
+      }
+
+      if (itemsList.length === 0) {
+        return res.json({ product: null, message: "식약처 DB에 등록되지 않은 바코드입니다." });
+      }
+
+      const item = itemsList[0];
+      const productName = item.PRDT_NM || item.prdt_nm || "알 수 없는 바코드 상품";
+      const brandName = item.MAKR_NAME || item.makr_name || "";
+
+      // Real API Call: 2. 제품명을 활용해 영양성분 정보 조회
+      let nutritionUrl = `http://apis.data.go.kr/1471000/FoodNtrIrdntInfoService1/getFoodNtrItdntList?serviceKey=${apiKey}&desc_kor=${encodeURIComponent(productName)}&type=json&numOfRows=1`;
+      let nutrResponse = await fetch(nutritionUrl);
+      if (!nutrResponse.ok) {
+        nutritionUrl = `http://apis.data.go.kr/1471000/FoodNtrIrdntInfoService1/getFoodNtrItdntList?serviceKey=${encodeURIComponent(apiKey)}&desc_kor=${encodeURIComponent(productName)}&type=json&numOfRows=1`;
+        nutrResponse = await fetch(nutritionUrl);
+      }
+      
+      let calories = 0, carbs = 0, protein = 0, fat = 0, servingSize = 100;
+
+      if (nutrResponse.ok) {
+        const nutrData = await nutrResponse.json();
+        const nutrItems = nutrData?.body?.items;
+        let nutrList: any[] = [];
+        if (nutrItems) {
+          if (Array.isArray(nutrItems)) nutrList = nutrItems;
+          else if (nutrItems.item && Array.isArray(nutrItems.item)) nutrList = nutrItems.item;
+          else if (nutrItems.item) nutrList = [nutrItems.item];
+          else nutrList = [nutrItems];
+        }
+
+        if (nutrList.length > 0) {
+          const nutr = nutrList[0];
+          calories = parseFloat(nutr.NUTR_CONT1) || 0;
+          carbs = parseFloat(nutr.NUTR_CONT2) || 0;
+          protein = parseFloat(nutr.NUTR_CONT3) || 0;
+          fat = parseFloat(nutr.NUTR_CONT4) || 0;
+          servingSize = parseFloat(nutr.SERV_SIZE) || 100;
+        }
+      }
+
+      res.json({
+        source: "api",
+        product: {
+          id: `barcode-${code}`,
+          name: productName,
+          brand_name: brandName,
+          calories,
+          carbs,
+          protein,
+          fat,
+          serving_desc: `Per ${servingSize}g`,
+          serving_weight_grams: servingSize
+        }
+      });
+    } catch (err: any) {
+      console.error("/api/food/barcode error:", err);
       res.status(500).json({ error: err.message || "Internal server error" });
     }
   });

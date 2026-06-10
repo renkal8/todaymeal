@@ -13,7 +13,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { UserProfile, HealthRecord, FoodLog, FastingLog } from '../types';
+import { UserProfile, HealthRecord, FoodLog, FastingLog, RecentFood } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -167,13 +167,19 @@ export const dbService = {
     const colRef = collection(db, 'users', userId, 'meals');
     // yearMonth is like '2023-10'
     const startDate = `${yearMonth}-01`;
-    const endDate = `${yearMonth}-31`;
+    
+    // Dynamically calculate the first day of next month for robust query limits
+    const [year, month] = yearMonth.split('-').map(Number);
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const nextMonthStr = String(nextMonth).padStart(2, '0');
+    const nextMonthFirstDate = `${nextYear}-${nextMonthStr}-01`;
     
     try {
       const q = query(
         colRef, 
         where('dateStr', '>=', startDate),
-        where('dateStr', '<=', endDate)
+        where('dateStr', '<', nextMonthFirstDate)
       );
       const querySnapshot = await getDocs(q);
       
@@ -291,15 +297,15 @@ export const dbService = {
   },
 
   // --- RECENT FOODS OPERATIONS ---
-  async getRecentFoods(userId: string): Promise<any[]> {
+  async getRecentFoods(userId: string): Promise<RecentFood[]> {
     const path = `users/${userId}/recentFoods`;
     try {
       const colRef = collection(db, 'users', userId, 'recentFoods');
       const q = query(colRef, orderBy('updatedAt', 'desc'), limit(100));
       const querySnapshot = await getDocs(q);
-      const items: any[] = [];
+      const items: RecentFood[] = [];
       querySnapshot.forEach(docSnap => {
-        items.push({ ...docSnap.data(), id: docSnap.id });
+        items.push({ ...docSnap.data() as RecentFood, id: docSnap.id });
       });
       return items;
     } catch (error) {
@@ -307,7 +313,7 @@ export const dbService = {
     }
   },
 
-  async saveRecentFood(userId: string, food: any): Promise<void> {
+  async saveRecentFood(userId: string, food: RecentFood): Promise<void> {
     const path = `users/${userId}/recentFoods/${food.id}`;
     try {
       const docRef = doc(db, 'users', userId, 'recentFoods', food.id);
@@ -328,5 +334,34 @@ export const dbService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
+  },
+
+  // --- ROUTINES OPERATIONS ---
+  async getMealRoutines(userId: string): Promise<any[]> {
+    const path = `users/${userId}/settings/routines`;
+    try {
+      const docRef = doc(db, 'users', userId, 'settings', 'routines');
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        return data.routines || [];
+      }
+      return [];
+    } catch (error) {
+      console.warn('Error fetching routines:', error);
+      return [];
+    }
+  },
+
+  async saveMealRoutines(userId: string, routines: any[]): Promise<void> {
+    const path = `users/${userId}/settings/routines`;
+    try {
+      const docRef = doc(db, 'users', userId, 'settings', 'routines');
+      // Using direct new Date() here inside service instead of modifying imports
+      await setDoc(docRef, { routines, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
   }
 };
+

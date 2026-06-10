@@ -8,6 +8,7 @@ interface NumberAdjusterProps {
   min?: number;
   max?: number;
   stepDecimal?: number; // Decimals to fix (e.g. 1 for bodyfat, 0 for carbs)
+  disabled?: boolean;
 }
 
 export default function NumberAdjuster({
@@ -17,7 +18,8 @@ export default function NumberAdjuster({
   unit = '',
   min = 0,
   max = 99999,
-  stepDecimal = 1
+  stepDecimal = 1,
+  disabled = false
 }: NumberAdjusterProps) {
 
   const formatValue = (val: number) => {
@@ -32,6 +34,7 @@ export default function NumberAdjuster({
   }, [value, stepDecimal]);
 
   const handleAdjust = (amount: number) => {
+    if (disabled) return;
     const rawVal = value + amount;
     // Round to avoid floating point precision issues (e.g. 0.1 + 0.2 = 0.30000004)
     const factor = Math.pow(10, stepDecimal);
@@ -74,16 +77,17 @@ export default function NumberAdjuster({
             type="number"
             inputMode="decimal"
             value={localValue}
-            onChange={handleInputChange}
-            onBlur={handleBlur}
-            className="w-16 text-right text-base font-black text-[#3B82F6] bg-transparent outline-none rounded transition-colors"
+            onChange={disabled ? undefined : handleInputChange}
+            onBlur={disabled ? undefined : handleBlur}
+            readOnly={disabled}
+            className={`w-16 text-right text-base font-black ${disabled ? 'text-[#94A3B8]' : 'text-[#3B82F6]'} bg-transparent outline-none rounded transition-colors`}
           />
           <span className="text-[12px] font-bold text-[#94A3B8] ml-1">{unit}</span>
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5 w-full">
-        {(() => {
+        {!disabled && (() => {
           const steps = stepDecimal > 0 ? [10, 1, 0.1] : [10, 5, 1];
           return (
             <>

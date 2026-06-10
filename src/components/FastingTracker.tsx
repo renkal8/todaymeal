@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useDragScroll } from "../utils/useDragScroll";
+import { auth } from "../lib/firebase";
+import { dbService } from "../services/dbService";
+import { onAuthStateChanged } from "firebase/auth";
+import { FastingLog } from "../types";
 import {
   Timer,
   Play,
@@ -31,6 +35,7 @@ export default function FastingTracker() {
   const [isFasting, setIsFasting] = useState(false);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Custom interactive date state
   const [customStartTimeInput, setCustomStartTimeInput] = useState<number>(
@@ -77,6 +82,64 @@ export default function FastingTracker() {
     const coeff = 1000 * 60 * 30; // 30 mins in ms
     return Math.round(timeMs / coeff) * coeff;
   };
+
+  // Listen to Auth State
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch / Sync fasting logs when userId transitions
+  useEffect(() => {
+    if (!userId) return;
+
+    const syncFastingWithFirebase = async () => {
+      try {
+        const activeLog = await dbService.getActiveFastingLog(userId);
+        if (activeLog) {
+          const stTime = new Date(activeLog.startTime).getTime();
+          setStartTime(stTime);
+          setCustomStartTimeInput(stTime);
+          setIsFasting(true);
+
+          const plan = FASTING_PLANS.find((p) => p.fast === activeLog.targetDuration);
+          if (plan) {
+            setSelectedPlan(plan);
+            localStorage.setItem("fasting_plan_id", plan.id);
+          }
+          localStorage.setItem("fasting_start_time", String(stTime));
+          localStorage.setItem("is_fasting", "true");
+        } else {
+          // If no active fast on remote but local state exists, synchronize up
+          const savedStartTime = localStorage.getItem("fasting_start_time");
+          const savedIsFasting = localStorage.getItem("is_fasting") === "true";
+
+          if (savedIsFasting && savedStartTime) {
+            const stTime = Number(savedStartTime);
+            await dbService.addFastingLog(userId, {
+              startTime: new Date(stTime).toISOString(),
+              targetDuration: selectedPlan.fast,
+              status: "active",
+            });
+            console.log("[FastingTracker] Uploaded local fasting progress to Firestore");
+          } else {
+            setIsFasting(false);
+            setStartTime(null);
+          }
+        }
+      } catch (error) {
+        console.error("[FastingTracker] Firebase sync error:", error);
+      }
+    };
+
+    syncFastingWithFirebase();
+  }, [userId]);
 
   // Load state from localStorage on init
   useEffect(() => {
@@ -159,7 +222,7 @@ export default function FastingTracker() {
   const strokeDashoffset = circumference - (progressPct / 100) * circumference;
 
   // Toggle handlers
-  const handleToggleFasting = () => {
+  const handleToggleFasting = async () => {
     if (isFasting) {
       // Trigger elegant non-blocking inline confirmation rather than alert limits
       setShowStopConfirm(true);
@@ -172,10 +235,23 @@ export default function FastingTracker() {
       localStorage.setItem("fasting_plan_id", selectedPlan.id);
       localStorage.setItem("is_fasting", "true");
       setIsEditingStartTime(false);
+
+      if (userId) {
+        try {
+          await dbService.addFastingLog(userId, {
+            startTime: new Date(finalStart).toISOString(),
+            targetDuration: selectedPlan.fast,
+            status: "active",
+          });
+          console.log("[FastingTracker] Started fasting on Firestore");
+        } catch (error) {
+          console.error("Failed to post fasting log to Firestore:", error);
+        }
+      }
     }
   };
 
-  const handleConfirmStop = () => {
+  const handleConfirmStop = async () => {
     setIsFasting(false);
     setStartTime(null);
     setCustomStartTimeInput(Date.now());
@@ -183,6 +259,18 @@ export default function FastingTracker() {
     localStorage.removeItem("is_fasting");
     setShowStopConfirm(false);
     setIsEditingStartTime(false);
+
+    if (userId) {
+      try {
+        const activeLog = await dbService.getActiveFastingLog(userId);
+        if (activeLog && activeLog.id) {
+          await dbService.completeFastingLog(userId, activeLog.id, new Date().toISOString());
+          console.log("[FastingTracker] Completed fasting on Firestore");
+        }
+      } catch (error) {
+        console.error("Failed to complete fasting log in Firestore:", error);
+      }
+    }
   };
 
   return (

@@ -18,14 +18,17 @@ import {
 import NumberAdjuster from "./NumberAdjuster";
 import { FOOD_PRESETS, CATEGORY_LABELS } from "../data/foodPresets";
 import { searchFoodAPI, ParsedFoodResult } from "../services/fatsecretApi";
+import { dbService } from "../services/dbService";
 
 interface Props {
+  userId?: string;
   onApplyRoutine: (routine: MealRoutine) => void;
 }
 
-export default function MealRoutineEditor({ onApplyRoutine }: Props) {
+export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
   const [routines, setRoutines] = useState<MealRoutine[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
 
   // New Routine State
   const [routineName, setRoutineName] = useState("");
@@ -79,13 +82,17 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem("diet_routines");
-    if (saved) {
+    if (!userId) return;
+    const fetchRoutines = async () => {
       try {
-        setRoutines(JSON.parse(saved));
-      } catch (e) {}
-    }
-  }, []);
+        const data = await dbService.getMealRoutines(userId);
+        setRoutines(data);
+      } catch (e) {
+        console.error("Failed to load routines inside editor", e);
+      }
+    };
+    fetchRoutines();
+  }, [userId]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -181,23 +188,48 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
     setCurrentFat(Math.round(activePreset.baseFat * scale * 10) / 10);
   };
 
-  const saveToCommon = (newRoutines: MealRoutine[]) => {
+  const saveToCommon = async (newRoutines: MealRoutine[]) => {
     setRoutines(newRoutines);
-    localStorage.setItem("diet_routines", JSON.stringify(newRoutines));
+    if (userId) {
+      await dbService.saveMealRoutines(userId, newRoutines);
+    } else {
+      localStorage.setItem("diet_routines", JSON.stringify(newRoutines));
+    }
   };
 
-  const handleCreateNewRoutine = () => {
+  const handleSaveRoutine = () => {
     if (!routineName.trim() || currentFoods.length === 0) return;
-    const newRoutine: MealRoutine = {
-      id: Date.now().toString(),
-      name: routineName,
-      mealTime: targetMeal,
-      foods: currentFoods,
-    };
-    saveToCommon([...routines, newRoutine]);
+    
+    if (editingRoutineId) {
+      const updated = routines.map(r => r.id === editingRoutineId ? {
+        ...r,
+        name: routineName,
+        mealTime: targetMeal,
+        foods: currentFoods,
+      } : r);
+      saveToCommon(updated);
+    } else {
+      const newRoutine: MealRoutine = {
+        id: Date.now().toString(),
+        name: routineName,
+        mealTime: targetMeal,
+        foods: currentFoods,
+      };
+      saveToCommon([...routines, newRoutine]);
+    }
+    
     setIsCreating(false);
+    setEditingRoutineId(null);
     setRoutineName("");
     setCurrentFoods([]);
+  };
+
+  const startEditing = (routine: MealRoutine) => {
+    setEditingRoutineId(routine.id);
+    setRoutineName(routine.name);
+    setTargetMeal(routine.mealTime);
+    setCurrentFoods([...routine.foods]);
+    setIsCreating(true);
   };
 
   const handleDeleteRoutine = (id: string) => {
@@ -636,18 +668,21 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setIsCreating(false)}
+                onClick={() => {
+                  setIsCreating(false);
+                  setEditingRoutineId(null);
+                }}
                 className="flex-1 h-10 border border-[#E2E8F0] text-[#64748B] font-bold rounded-xl text-xs cursor-pointer hover:bg-slate-50"
               >
                 취소
               </button>
               <button
                 type="button"
-                onClick={handleCreateNewRoutine}
+                onClick={handleSaveRoutine}
                 disabled={!routineName.trim() || currentFoods.length === 0}
                 className="flex-1 h-10 bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-55 text-white font-bold rounded-xl text-xs cursor-pointer"
               >
-                루틴 생성
+                {editingRoutineId ? '루틴 수정완료' : '루틴 생성'}
               </button>
             </div>
           </div>
@@ -685,13 +720,22 @@ export default function MealRoutineEditor({ onApplyRoutine }: Props) {
                         {r.foods.reduce((a, b) => a + b.calories, 0)} kcal
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteRoutine(r.id)}
-                      className="text-[#94A3B8] hover:text-red-500"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditing(r)}
+                        className="text-[#94A3B8] hover:text-blue-500 p-1"
+                      >
+                        <span className="text-xs">✏️</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRoutine(r.id)}
+                        className="text-[#94A3B8] hover:text-red-500 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <button
                     type="button"

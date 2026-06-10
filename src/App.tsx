@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
 import { dbService } from "./services/dbService";
+import { getLocalDateString } from "./utils/dateUtils";
 import { UserProfile, HealthRecord, FoodLog, FastingLog } from "./types";
 import { generateWeeklyFeedback } from "./utils/dietCalculator";
 import { Reorder, useDragControls } from "motion/react";
@@ -20,6 +21,8 @@ import TrendChart from "./components/TrendChart";
 import NumberAdjuster from "./components/NumberAdjuster";
 import CopyMealsModal from "./components/CopyMealsModal";
 import FastingTracker from "./components/FastingTracker";
+import CompositionTab from "./components/CompositionTab";
+import ProfileTab from "./components/ProfileTab";
 
 // Lucide Icons
 import {
@@ -57,6 +60,39 @@ import {
 
 import MealRoutineEditor from "./components/MealRoutineEditor";
 
+export const EMOJI_CATEGORIES = [
+  {
+    id: "fruit",
+    name: "과일/열매",
+    emojis: ["🍎", "🍏", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍒", "🍑", "🥭", "🍍", "🥝", "🍈"]
+  },
+  {
+    id: "vegetable",
+    name: "채소/견과",
+    emojis: ["🥦", "🥬", "🍅", "🥕", "🧅", "🌽", "🥒", "🍠", "🥔", "🍄", "🫒", "🥜", "🌰"]
+  },
+  {
+    id: "meat",
+    name: "육류/해산",
+    emojis: ["🥩", "🍗", "🍖", "🥓", "🐟", "🍤", "🦞", "🦀", "🐙", "🥚"]
+  },
+  {
+    id: "meal",
+    name: "식사/요리",
+    emojis: ["🍛", "🍲", "🥘", "🍝", "🍣", "🥟", "🍜", "🍔", "🍕", "🥪", "🌮", "🍙", "🍱", "🍢"]
+  },
+  {
+    id: "dessert",
+    name: "디저트",
+    emojis: ["🍞", "🥐", "🥯", "🥞", "🧁", "🍩", "🍪", "🍫", "🍯", "🍦", "🍧", "🍮"]
+  },
+  {
+    id: "drink",
+    name: "음료/기타",
+    emojis: ["☕", "🍵", "🥤", "🧋", "🥛", "🍺", "🍷", "🥃", "🍹", "🧊"]
+  }
+];
+
 interface MealGroupItemProps {
   key?: string;
   groupKey: string;
@@ -66,6 +102,7 @@ interface MealGroupItemProps {
   onDelete: (id: string) => void;
   handleDeleteFoodLog: (id: string) => Promise<void> | void;
   onStartEditFoodLog?: (log: FoodLog) => void;
+  onStartEditEmoji?: (log: FoodLog) => void;
   setActiveMealTime: (id: any) => void;
 }
 
@@ -78,6 +115,7 @@ function MealGroupItem({
   onDelete,
   handleDeleteFoodLog,
   onStartEditFoodLog,
+  onStartEditEmoji,
   setActiveMealTime,
 }: MealGroupItemProps) {
   const isCustom = !["breakfast", "lunch", "dinner", "snack"].includes(
@@ -212,22 +250,10 @@ function MealGroupItem({
                   <span
                     className="text-base select-none mt-0.5 cursor-pointer hover:scale-110 transition-transform block"
                     title="아이콘 변경"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
-                      const currentIcon = log.icon || "✨";
-                      const newEmoji = window.prompt(
-                        "음식 아이콘 이모지를 수정하세요 (예: 🥩, 🍎, 🍚):",
-                        currentIcon,
-                      );
-                      if (newEmoji && newEmoji.trim().length > 0 && user) {
-                        try {
-                          await dbService.updateFoodLog(user.uid, log.id, {
-                            icon: newEmoji.trim().charAt(0),
-                          });
-                          loadUserData(user.uid);
-                        } catch (err) {
-                          console.error("Failed to update icon", err);
-                        }
+                      if (onStartEditEmoji) {
+                        onStartEditEmoji(log);
                       }
                     }}
                   >
@@ -291,7 +317,7 @@ function MealGroupItem({
               className="mt-1 h-10 w-full border border-dashed border-[#E2E8F0] dark:border-slate-700 text-neutral-500 dark:text-slate-400 hover:text-[#3B82F6] hover:border-[#3B82F6] dark:hover:text-[#3B82F6] rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98"
             >
               <Plus className="w-4 h-4 text-[#3B82F6]" />
-              <span>음식 더 추가하기</span>
+              <span>음식 추가/수정</span>
             </button>
           </>
         )}
@@ -321,7 +347,7 @@ export default function App() {
 
   // States
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    getLocalDateString()
   );
 
   const [isCopyModalOpen, setIsCopyModalOpen] = useState<boolean>(false);
@@ -370,12 +396,17 @@ export default function App() {
   const [editProtein, setEditProtein] = useState<number>(0);
   const [editFat, setEditFat] = useState<number>(0);
 
+  // States for custom emoji selection popup modal
+  const [emojiLogToEdit, setEmojiLogToEdit] = useState<FoodLog | null>(null);
+  const [emojiInput, setEmojiInput] = useState<string>("");
+  const [activeEmojiTab, setActiveEmojiTab] = useState<string>("fruit");
+
   // Quick state for body comp manual adjusts
   const [compWeight, setCompWeight] = useState<number>(64.5);
   const [compMuscle, setCompMuscle] = useState<number>(24.0);
   const [compFatPct, setCompFatPct] = useState<number>(28.0);
   const [compDate, setCompDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    getLocalDateString()
   );
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
@@ -819,6 +850,30 @@ export default function App() {
     }
   };
 
+  const handleMultiSave = async (newLogs: Omit<FoodLog, "userId">[], logsToUpdate: FoodLog[], logsToDelete: string[]) => {
+    if (!user) return;
+    try {
+      setUiLoading(true);
+      for (const logData of newLogs) {
+        if (activeMealTime) logData.mealTime = activeMealTime;
+        else if (!logData.mealTime) logData.mealTime = "snack";
+        await dbService.addFoodLog(user.uid, logData);
+      }
+      for (const logData of logsToUpdate) {
+        await dbService.updateFoodLog(user.uid, logData.id!, logData);
+      }
+      for (const id of logsToDelete) {
+        await dbService.deleteFoodLog(user.uid, id);
+      }
+      setActiveMealTime(null);
+      await loadDayFoods();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUiLoading(false);
+    }
+  };
+
   const handleDeleteFoodLog = async (mealId: string) => {
     if (!user) return;
     try {
@@ -922,7 +977,7 @@ export default function App() {
   const shiftDate = (amount: number) => {
     const current = new Date(selectedDate);
     current.setDate(current.getDate() + amount);
-    setSelectedDate(current.toISOString().split("T")[0]);
+    setSelectedDate(getLocalDateString(current));
   };
 
   // Pre-calculations for nutrition totals
@@ -1132,7 +1187,7 @@ export default function App() {
                   >
                     <Calendar className="w-4 h-4 text-[#3B82F6]" />
                     <span>
-                      {selectedDate === new Date().toISOString().split("T")[0]
+                      {selectedDate === getLocalDateString()
                         ? `오늘 (${selectedDate})`
                         : selectedDate}
                     </span>
@@ -1395,6 +1450,8 @@ export default function App() {
                     </div>
                     <MealLogger
                       onAddLog={handleAddFoodLog}
+                      onMultiSave={handleMultiSave}
+                      existingLogs={foodLogs.filter((log) => log.mealTime === activeMealTime)}
                       dateStr={selectedDate}
                       onOpenCopyModal={() => setIsCopyModalOpen(true)}
                       onApplyRoutine={handleApplyRoutine}
@@ -1478,6 +1535,10 @@ export default function App() {
                             handleDeleteFoodLog={handleDeleteFoodLog}
                             setActiveMealTime={setActiveMealTime}
                             onStartEditFoodLog={handleStartEditFoodLog}
+                            onStartEditEmoji={(log) => {
+                              setEmojiLogToEdit(log);
+                              setEmojiInput(log.icon || "✨");
+                            }}
                           />
                         );
                       })}
@@ -1542,328 +1603,47 @@ export default function App() {
 
           {/* TAB 3: BODY COMPOSITION MANUAL INSERTS */}
           {activeTab === "composition" && (
-            <div className="flex flex-col gap-4">
-              {/* Add body record panel clicker button */}
-              {!isAddingComp ? (
-                <div className="flex gap-2 w-full">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingComp(true)}
-                    className="flex-1 flex items-center justify-center gap-1 bg-slate-900 text-white h-11 text-xs font-bold rounded-xl shadow-xs cursor-pointer active:scale-98 transition-all hover:bg-slate-800"
-                    id="btn-open-bodycomp-form"
-                  >
-                    <Plus className="w-4 h-4 text-[#3B82F6]" /> 직접 등록
-                  </button>
-                  <label className="flex-1 flex items-center justify-center gap-1 bg-neutral-100 text-[#1E293B] border border-[#E2E8F0] h-11 text-xs font-bold rounded-xl shadow-xs cursor-pointer active:scale-98 transition-all hover:bg-neutral-200">
-                    <input
-                      type="file"
-                      accept=".csv"
-                      className="hidden"
-                      onChange={handleInbodyUpload}
-                    />
-                    <Upload className="w-4 h-4 text-[#1E293B]" /> 인바디 데이터
-                    업로드
-                  </label>
-                </div>
-              ) : (
-                <div className="bg-white border border-neutral-150 rounded-2xl p-4 shadow-xs flex flex-col gap-4">
-                  <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
-                    <span className="text-xs font-extrabold text-neutral-800">
-                      {editingCompId ? "체성분 기록 수정" : "체성분 신규 등록"}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setIsAddingComp(false);
-                        setEditingCompId(null);
-                      }}
-                      className="text-neutral-400 hover:text-neutral-600 text-xs font-semibold cursor-pointer"
-                    >
-                      취소
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-neutral-700">
-                        측정 일자
-                      </label>
-                      <input
-                        type="date"
-                        value={compDate}
-                        onChange={(e) => setCompDate(e.target.value)}
-                        className="w-full text-xs h-10 border border-neutral-200 rounded-xl px-3 outline-none focus:border-[#3B82F6] transition-colors"
-                      />
-                    </div>
-
-                    <NumberAdjuster
-                      value={compWeight}
-                      onChange={setCompWeight}
-                      label="체중 (Weight)"
-                      unit="kg"
-                      min={30}
-                      max={200}
-                      stepDecimal={1}
-                    />
-
-                    <NumberAdjuster
-                      value={compMuscle}
-                      onChange={setCompMuscle}
-                      label="골격근량 (SMM)"
-                      unit="kg"
-                      min={5}
-                      max={80}
-                      stepDecimal={1}
-                    />
-
-                    <NumberAdjuster
-                      value={compFatPct}
-                      onChange={setCompFatPct}
-                      label="체지방률 (BFP)"
-                      unit="%"
-                      min={3}
-                      max={60}
-                      stepDecimal={1}
-                    />
-
-                    <p className="text-[10px] text-emerald-600 bg-emerald-50 p-2 rounded-lg leading-4">
-                      💡 <strong>안내:</strong> 인바디 등록 후 일주일간은
-                      체성분이 크게 변하지 않으므로 잦은 변경을 권장하지
-                      않습니다.
-                      <br />* 체성분을 등록해도 <strong>1일 목표 칼로리</strong>
-                      는 바로 변경되지 않으며, 프로필 [주간 자동 칼로리 갱신]
-                      설정에 따라 지정된 요일에 갱신됩니다.
-                    </p>
-
-                    <button
-                      onClick={
-                        editingCompId
-                          ? handleUpdateHealthRecord
-                          : handleAddHealthRecord
-                      }
-                      disabled={uiLoading}
-                      className="w-full h-11 bg-slate-900 text-white text-xs font-extrabold rounded-xl hover:bg-slate-800 transition-all active:scale-98 cursor-pointer shadow-sm"
-                      id="submit-bodycomp-btn"
-                    >
-                      {editingCompId ? "수정 사항 저장" : "체성분 등록"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Composition histories log */}
-              <div className="flex flex-col gap-2">
-                <h4 className="text-xs font-bold text-neutral-500 px-1">
-                  기록 히스토리 ({records.length})
-                </h4>
-                {records.length === 0 ? (
-                  <div className="p-8 text-center bg-white border border-neutral-150 rounded-2xl">
-                    <p className="text-xs text-neutral-400 font-medium">
-                      아직 등록된 기록이 없습니다.
-                    </p>
-                  </div>
-                ) : (
-                  records.map((rec) => {
-                    const d = new Date(rec.loggedAt);
-                    return (
-                      <div
-                        key={rec.id}
-                        className="bg-white border border-neutral-150 rounded-xl p-3.5 flex justify-between items-center"
-                        id={`record-item-${rec.id}`}
-                      >
-                        <div>
-                          <p className="text-neutral-800 font-extrabold text-xs">
-                            {d.toLocaleDateString()}
-                          </p>
-                          <div className="flex gap-3 text-[10.5px] mt-1 font-mono text-neutral-600 font-medium">
-                            <span>
-                              체중:{" "}
-                              <strong className="text-neutral-800">
-                                {rec.weight}kg
-                              </strong>
-                            </span>
-                            {rec.skeletalMuscleMass && (
-                              <span>
-                                골격근:{" "}
-                                <strong className="text-neutral-800">
-                                  {rec.skeletalMuscleMass}kg
-                                </strong>
-                              </span>
-                            )}
-                            {rec.bodyFatPercentage && (
-                              <span>
-                                지방률:{" "}
-                                <strong className="text-neutral-800">
-                                  {rec.bodyFatPercentage}%
-                                </strong>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <button
-                            onClick={() => handleEditRecord(rec)}
-                            className="p-1.5 text-neutral-300 hover:text-blue-500 rounded-lg cursor-pointer"
-                            id={`btn-edit-record-${rec.id}`}
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRecord(rec.id!)}
-                            className="p-1.5 text-neutral-300 hover:text-rose-500 rounded-lg cursor-pointer"
-                            id={`btn-del-record-${rec.id}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+            <CompositionTab
+              records={records}
+              isAddingComp={isAddingComp}
+              setIsAddingComp={setIsAddingComp}
+              editingCompId={editingCompId}
+              setEditingCompId={setEditingCompId}
+              compDate={compDate}
+              setCompDate={setCompDate}
+              compWeight={compWeight}
+              setCompWeight={setCompWeight}
+              compMuscle={compMuscle}
+              setCompMuscle={setCompMuscle}
+              compFatPct={compFatPct}
+              setCompFatPct={setCompFatPct}
+              handleInbodyUpload={handleInbodyUpload}
+              handleUpdateHealthRecord={handleUpdateHealthRecord}
+              handleAddHealthRecord={handleAddHealthRecord}
+              handleEditRecord={handleEditRecord}
+              handleDeleteRecord={handleDeleteRecord}
+              uiLoading={uiLoading}
+            />
           )}
 
           {/* TAB 5: ROUTINES */}
           {activeTab === "routine" && (
-            <MealRoutineEditor onApplyRoutine={handleApplyRoutine} />
+            <MealRoutineEditor userId={user?.uid} onApplyRoutine={handleApplyRoutine} />
           )}
 
           {/* TAB 6: FASTING TRACKER */}
           {activeTab === "fasting" && <FastingTracker />}
 
           {/* TAB 4: MY PROFILE / SETTINGS */}
-          {activeTab === "profile" && !isEditingProfile && profile && (
-            <div className="flex flex-col gap-4">
-              <div className="bg-white dark:bg-slate-900 border border-neutral-150 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col gap-3.5">
-                <div className="flex items-center gap-3 border-b border-neutral-100 dark:border-slate-800 pb-3">
-                  <div className="w-10 h-10 bg-[#3B82F6] text-white rounded-full flex items-center justify-center font-extrabold shadow-sm">
-                    {profile.displayName?.[0] || user.displayName?.[0] || "U"}
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-neutral-800 dark:text-white">
-                      {profile.displayName || user.displayName}
-                    </h3>
-                    <p className="text-[10px] text-neutral-400 dark:text-slate-400">
-                      {user.email}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Body target parameters */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="bg-neutral-50 dark:bg-slate-800 p-2.5 rounded-xl border border-neutral-150/70 dark:border-slate-700 text-center">
-                    <span className="text-[10px] text-neutral-400 dark:text-slate-400 font-bold">
-                      목표 칼로리
-                    </span>
-                    <p className="text-sm font-extrabold text-slate-950 dark:text-white font-mono mt-0.5">
-                      {profile.targetCalories} kcal
-                    </p>
-                  </div>
-                  <div className="bg-neutral-50 dark:bg-slate-800 p-2.5 rounded-xl border border-neutral-150/70 dark:border-slate-700 text-center">
-                    <span className="text-[10px] text-neutral-400 dark:text-slate-400 font-bold">
-                      목표 몸무게
-                    </span>
-                    <p className="text-sm font-extrabold text-slate-950 dark:text-white font-mono mt-0.5">
-                      {profile.targetWeight} kg
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <h4 className="text-[10px] text-neutral-400 dark:text-slate-400 font-black tracking-wider uppercase mb-0.5">
-                    매주 권장할 영양 매크로 타겟
-                  </h4>
-                  <div className="flex gap-4 items-center justify-between text-xs font-mono font-bold bg-neutral-50 dark:bg-slate-800 p-2.5 border border-neutral-150 dark:border-slate-700 rounded-xl">
-                    <div className="text-center flex-1">
-                      <p className="text-[9px] font-sans font-extrabold text-neutral-400 dark:text-slate-400">
-                        탄 (Carbs)
-                      </p>
-                      <p className="text-[11px] text-neutral-700 dark:text-white mt-0.5">
-                        {profile.targetCarbs}g
-                      </p>
-                    </div>
-                    <div className="text-center flex-1 border-x border-neutral-200 dark:border-slate-700">
-                      <p className="text-[9px] font-sans font-extrabold text-neutral-400 dark:text-slate-400">
-                        단 (Protein)
-                      </p>
-                      <p className="text-[11px] text-neutral-700 dark:text-white mt-0.5">
-                        {profile.targetProtein}g
-                      </p>
-                    </div>
-                    <div className="text-center flex-1">
-                      <p className="text-[9px] font-sans font-extrabold text-neutral-400 dark:text-slate-400">
-                        지 (Fat)
-                      </p>
-                      <p className="text-[11px] text-neutral-700 dark:text-white mt-0.5">
-                        {profile.targetFat}g
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-neutral-100 dark:bg-slate-800 p-3 rounded-xl text-neutral-500 dark:text-slate-300 font-medium text-[10.5px] leading-4.5 flex items-start gap-1.5 border border-neutral-200 dark:border-slate-700">
-                  <Info className="w-3.5 h-3.5 text-neutral-400 dark:text-slate-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    본 다이어트 영양 수치는 인바디 검출 값에 대한{" "}
-                    <strong className="text-neutral-700 dark:text-white">
-                      Katch-McArdle 방정식
-                    </strong>
-                    을 최우선으로 사용하여 근육 보존 계수를 극대화한 개인 맞춤식
-                    분할입니다.
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 mt-1">
-                  <button
-                    onClick={() => setIsEditingProfile(true)}
-                    className="w-full h-10 bg-[#3B82F6] text-white rounded-xl text-xs font-bold font-sans hover:bg-blue-600 active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                    id="btn-edit-profile-action"
-                  >
-                    <UserIcon className="w-4 h-4" /> 내 프로필 편집하기
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Just an alert for now as requested UI change or implement later.
-                      alert("새로운 프로필 추가 기능은 준비중입니다.");
-                    }}
-                    className="w-full h-10 bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-neutral-300 rounded-xl text-xs font-bold font-sans hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                    id="btn-add-profile-action"
-                  >
-                    <Plus className="w-4 h-4" /> 프로필 추가
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "profile" && isEditingProfile && profile && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex justify-between items-center mb-3">
-                <button
-                  onClick={() => setIsEditingProfile(false)}
-                  className="text-xs font-bold text-neutral-500 flex items-center gap-1 cursor-pointer hover:text-black"
-                >
-                  <ChevronLeft className="w-4 h-4" /> 가이드로 돌아가기
-                </button>
-              </div>
-              <ProfileForm
-                initialProfile={profile}
-                onSave={handleSaveProfile}
-                isLoading={uiLoading}
-              />
-            </div>
+          {activeTab === "profile" && profile && (
+            <ProfileTab
+              profile={profile}
+              user={user}
+              isEditingProfile={isEditingProfile}
+              setIsEditingProfile={setIsEditingProfile}
+              handleSaveProfile={handleSaveProfile}
+              uiLoading={uiLoading}
+            />
           )}
         </main>
 
@@ -2109,6 +1889,107 @@ export default function App() {
                   <Check className="w-4 h-4" /> 저장 완료
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Emoji Picker Popup Modal */}
+        {emojiLogToEdit && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-800 border border-neutral-200 dark:border-slate-700 w-full max-w-sm rounded-[24px] overflow-hidden shadow-2xl flex flex-col p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xs font-black text-neutral-800 dark:text-neutral-200">
+                  음식 아이콘 변경
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEmojiLogToEdit(null)}
+                  className="p-1 hover:bg-neutral-100 dark:hover:bg-slate-700 rounded-full text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Category tabs with scroll */}
+              <div className="flex gap-1 overflow-x-auto pb-2 mb-3 scrollbar-none no-scrollbar">
+                {EMOJI_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveEmojiTab(cat.id)}
+                    className={`px-3 py-1.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition-all cursor-pointer ${
+                      activeEmojiTab === cat.id
+                        ? "bg-[#3B82F6] border-[#3B82F6] text-white"
+                        : "bg-neutral-50 dark:bg-slate-900 border-neutral-200 dark:border-slate-700 text-neutral-600 dark:text-slate-400 hover:bg-neutral-100"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Grid of presets inside selected category */}
+              <div className="grid grid-cols-6 gap-2 mb-4 max-h-[160px] overflow-y-auto pr-1">
+                {(EMOJI_CATEGORIES.find((c) => c.id === activeEmojiTab)?.emojis || []).map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      setEmojiInput(emoji);
+                    }}
+                    className={`text-xl p-2 rounded-xl border hover:bg-neutral-50 dark:hover:bg-slate-700/50 transition-all cursor-pointer ${
+                      emojiInput === emoji
+                        ? "border-[#3B82F6] bg-blue-50/50 dark:bg-blue-950/30"
+                        : "border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900"
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Input */}
+              <div className="flex gap-2 items-center mb-4">
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={emojiInput}
+                  onChange={(e) => setEmojiInput(e.target.value.trim())}
+                  placeholder="직접 입력 (이모지)"
+                  className="flex-1 h-9 border border-neutral-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-900 rounded-lg px-2 text-xs font-bold text-center focus:outline-none focus:border-[#3B82F6] dark:text-white"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 text-xs font-black">
+                <button
+                  type="button"
+                  onClick={() => setEmojiLogToEdit(null)}
+                  className="flex-1 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[#64748B] dark:text-neutral-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const char = emojiInput.trim().charAt(0) || "✨";
+                    if (user && emojiLogToEdit.id) {
+                      try {
+                        await dbService.updateFoodLog(user.uid, emojiLogToEdit.id, {
+                          icon: char,
+                        });
+                        loadUserData(user.uid);
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }
+                    setEmojiLogToEdit(null);
+                  }}
+                  className="flex-1 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  적용
+                </button>
+               </div>
             </div>
           </div>
         )}

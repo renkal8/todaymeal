@@ -3,6 +3,8 @@ import { dbService } from '../services/dbService';
 import { FoodLog } from '../types';
 import { X, Search, CheckCircle2, Circle, ChevronLeft, ChevronRight } from 'lucide-react';
 
+import { getLocalDateString } from "../utils/dateUtils";
+
 interface CopyMealsModalProps {
   userId: string;
   currentDate: string;
@@ -14,7 +16,7 @@ export default function CopyMealsModal({ userId, currentDate, onCopy, onClose }:
   const [sourceDate, setSourceDate] = useState<string>(() => {
     const d = new Date(currentDate);
     d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
+    return getLocalDateString(d);
   });
   
   const [logs, setLogs] = useState<FoodLog[]>([]);
@@ -51,7 +53,7 @@ export default function CopyMealsModal({ userId, currentDate, onCopy, onClose }:
   const shiftSourceDate = (days: number) => {
     const d = new Date(sourceDate);
     d.setDate(d.getDate() + days);
-    setSourceDate(d.toISOString().split('T')[0]);
+    setSourceDate(getLocalDateString(d));
   };
 
   const handleCopy = () => {

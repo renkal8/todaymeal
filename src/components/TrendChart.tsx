@@ -19,6 +19,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { HealthRecord, UserProfile } from "../types";
+import { getLocalDateString } from "../utils/dateUtils";
 
 interface TrendChartProps {
   records: HealthRecord[];
@@ -41,7 +42,7 @@ export default function TrendChart({ records, profile }: TrendChartProps) {
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 3); // 3M default
-    return d.toISOString().split("T")[0];
+    return getLocalDateString(d);
   });
   const [endDate, setEndDate] = useState<string>(() => {
     const startWeightRecOrigin = [...records]
@@ -58,7 +59,7 @@ export default function TrendChart({ records, profile }: TrendChartProps) {
     const durationMs = (profile.dietDurationWeeks ?? 8) * 7 * 86400000;
     const dietEndMs = startOriginTime + durationMs;
     const d = new Date(Math.max(Date.now(), dietEndMs));
-    return d.toISOString().split("T")[0];
+    return getLocalDateString(d);
   });
 
   const [isDateRangeOpen, setIsDateRangeOpen] = useState(false);
@@ -262,7 +263,7 @@ export default function TrendChart({ records, profile }: TrendChartProps) {
       displayLabel = `${d.getFullYear()}년`;
       fullDate = `${d.getFullYear()}년`;
     } else {
-      key = d.toISOString().split("T")[0];
+      key = getLocalDateString(d);
       displayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
       fullDate = d.toLocaleDateString();
     }
@@ -480,8 +481,8 @@ export default function TrendChart({ records, profile }: TrendChartProps) {
         start.setFullYear(start.getFullYear() - 3);
       }
     }
-    const newStartStr = start.toISOString().split("T")[0];
-    const newEndStr = end.toISOString().split("T")[0];
+    const newStartStr = getLocalDateString(start);
+    const newEndStr = getLocalDateString(end);
     setStartDate(newStartStr);
     setEndDate(newEndStr);
     setTempStartDate(newStartStr);

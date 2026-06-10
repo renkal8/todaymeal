@@ -77,6 +77,10 @@ export interface FoodPreset {
   baseGrams: number; // usually 100
 }
 
+export interface RecentFood extends FoodPreset {
+  updatedAt?: string;
+}
+
 export interface MealRoutine {
   id: string;
   name: string;
