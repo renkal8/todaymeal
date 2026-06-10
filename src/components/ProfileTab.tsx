@@ -10,6 +10,7 @@ interface ProfileTabProps {
   setIsEditingProfile: (val: boolean) => void;
   handleSaveProfile: (profile: Omit<UserProfile, "userId">) => Promise<void>;
   uiLoading: boolean;
+  onOpenProfileManager?: () => void;
 }
 
 export default function ProfileTab({
@@ -19,6 +20,7 @@ export default function ProfileTab({
   setIsEditingProfile,
   handleSaveProfile,
   uiLoading,
+  onOpenProfileManager,
 }: ProfileTabProps) {
   return (
     <>
@@ -112,7 +114,11 @@ export default function ProfileTab({
               </button>
               <button
                 onClick={() => {
-                  alert("새로운 프로필 추가 기능은 준비중입니다.");
+                  if (onOpenProfileManager) {
+                    onOpenProfileManager();
+                  } else {
+                    alert("새로운 프로필 추가 기능은 준비중입니다.");
+                  }
                 }}
                 className="w-full h-10 bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-neutral-300 rounded-xl text-xs font-bold font-sans hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 id="btn-add-profile-action"

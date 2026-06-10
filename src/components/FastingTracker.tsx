@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useDragScroll } from "../utils/useDragScroll";
-import { auth } from "../lib/firebase";
 import { dbService } from "../services/dbService";
-import { onAuthStateChanged } from "firebase/auth";
 import { FastingLog } from "../types";
 import {
   Timer,
@@ -30,12 +28,15 @@ const FASTING_PLANS = [
   { id: "72:0", fast: 72, eat: 0, name: "72시간 플랜 (3일)" },
 ];
 
-export default function FastingTracker() {
+interface FastingTrackerProps {
+  userId: string | null;
+}
+
+export default function FastingTracker({ userId }: FastingTrackerProps) {
   const [selectedPlan, setSelectedPlan] = useState(FASTING_PLANS[2]); // 기본 16:8
   const [isFasting, setIsFasting] = useState(false);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [userId, setUserId] = useState<string | null>(null);
 
   // Custom interactive date state
   const [customStartTimeInput, setCustomStartTimeInput] = useState<number>(
@@ -82,18 +83,6 @@ export default function FastingTracker() {
     const coeff = 1000 * 60 * 30; // 30 mins in ms
     return Math.round(timeMs / coeff) * coeff;
   };
-
-  // Listen to Auth State
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-      } else {
-        setUserId(null);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Fetch / Sync fasting logs when userId transitions
   useEffect(() => {

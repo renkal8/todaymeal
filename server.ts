@@ -547,24 +547,7 @@ async function startServer() {
 
       const token = await getFatSecretToken();
       
-      // Check if query contains Korean characters
-      const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(originalQuery);
-      let translatedQuery = originalQuery;
-
-      if (hasKorean) {
-        try {
-          const chatResponse = await ai.models.generateContent({
-             model: "gemini-2.5-flash",
-             contents: `Translate this Korean food name to a simple English product name suitable for a grocery database search. Return ONLY the English name, no conversational text. Input: ${originalQuery}`
-          });
-          translatedQuery = chatResponse?.text?.trim() || originalQuery;
-          console.log(`Translated FatSecret Query: "${originalQuery}" -> "${translatedQuery}"`);
-        } catch (e) {
-          console.error("Translation error:", e);
-        }
-      }
-
-      let searchUrl = `${FATSECRET_API_URL}?method=foods.search&search_expression=${encodeURIComponent(translatedQuery)}&format=json`;
+      let searchUrl = `${FATSECRET_API_URL}?method=foods.search&search_expression=${encodeURIComponent(originalQuery)}&format=json&region=KR&language=ko`;
       
       let response = await fetch(searchUrl, {
         method: 'GET',
@@ -578,31 +561,6 @@ async function startServer() {
       }
 
       let data = await response.json();
-
-      // Transiate result names back to Korean if original search was Korean
-      if (hasKorean && data && data.foods && data.foods.food) {
-        try {
-          let foodsArray = data.foods.food;
-          if (!Array.isArray(foodsArray)) foodsArray = [foodsArray];
-          
-          const namesList = foodsArray.map((f: any) => f.food_name).join("\n");
-          
-          const chatResponse = await ai.models.generateContent({
-             model: "gemini-2.5-flash",
-             contents: `Translate the following English food product names to Korean natively. Return exactly the same number of lines. Keep brand names as is or translate gracefully.\n\n${namesList}`
-          });
-          
-          const translatedNames = chatResponse?.text?.trim().split("\n") || [];
-          if (translatedNames.length === foodsArray.length) {
-            for (let i = 0; i < foodsArray.length; i++) {
-               foodsArray[i].food_name = translatedNames[i];
-            }
-          }
-        } catch (e) {
-           console.error("Result translation error:", e);
-        }
-      }
-
       res.json(data);
     } catch (err: any) {
       console.error("/api/fatsecret/search error:", err);

@@ -21,6 +21,8 @@ export interface UserProfile {
   weeklyWeightLossTarget?: number; // in grams per week (e.g. 500 for standard)
   dietStartDate?: string;
   dietDurationWeeks?: number;
+  mealOrder?: string[];
+  customNames?: Record<string, string>;
   updatedAt: string;
 }
 

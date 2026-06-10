@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
 import {
   GoogleAuthProvider,
   signInWithPopup,
@@ -23,6 +26,7 @@ import CopyMealsModal from "./components/CopyMealsModal";
 import FastingTracker from "./components/FastingTracker";
 import CompositionTab from "./components/CompositionTab";
 import ProfileTab from "./components/ProfileTab";
+import ProfileManagerModal from "./components/ProfileManagerModal";
 
 // Lucide Icons
 import {
@@ -330,6 +334,12 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState<boolean>(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string>(() => {
+    return localStorage.getItem("activeProfileId") || "main";
+  });
+  const [mainProfile, setMainProfile] = useState<UserProfile | null>(null);
+  const [subProfiles, setSubProfiles] = useState<UserProfile[]>([]);
+  const [isProfileManagerOpen, setIsProfileManagerOpen] = useState<boolean>(false);
   const [profileLoading, setProfileLoading] = useState<boolean>(true);
 
   // Core Data Lists
@@ -350,6 +360,24 @@ export default function App() {
     getLocalDateString()
   );
 
+  const filteredRecords = useMemo(() => {
+    return records.filter((rec) => {
+      if (activeProfileId === "main") {
+        return !rec.subProfileId || rec.subProfileId === "main";
+      }
+      return rec.subProfileId === activeProfileId;
+    });
+  }, [records, activeProfileId]);
+
+  const filteredFoodLogs = useMemo(() => {
+    return foodLogs.filter((log) => {
+      if (activeProfileId === "main") {
+        return !log.subProfileId || log.subProfileId === "main";
+      }
+      return log.subProfileId === activeProfileId;
+    });
+  }, [foodLogs, activeProfileId]);
+
   const [isCopyModalOpen, setIsCopyModalOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "meals" | "composition" | "profile" | "routine" | "fasting"
@@ -365,6 +393,22 @@ export default function App() {
     if (saved) return JSON.parse(saved);
     return {};
   });
+
+  const handleUpdateMealOrder = async (newOrder: string[]) => {
+    setMealOrder(newOrder);
+    localStorage.setItem("mealOrder", JSON.stringify(newOrder));
+    if (user && profile) {
+      await dbService.saveUserProfile(user.uid, { ...profile, mealOrder: newOrder });
+    }
+  };
+
+  const handleUpdateCustomNames = async (newNames: Record<string, string>) => {
+    setCustomNames(newNames);
+    localStorage.setItem("customNames", JSON.stringify(newNames));
+    if (user && profile) {
+      await dbService.saveUserProfile(user.uid, { ...profile, customNames: newNames });
+    }
+  };
   const [isReorderingMeals, setIsReorderingMeals] = useState<boolean>(false);
 
   const moveMeal = (index: number, direction: -1 | 1) => {
@@ -374,8 +418,7 @@ export default function App() {
     const temp = newOrder[index];
     newOrder[index] = newOrder[swapIdx];
     newOrder[swapIdx] = temp;
-    setMealOrder(newOrder);
-    localStorage.setItem("mealOrder", JSON.stringify(newOrder));
+    handleUpdateMealOrder(newOrder);
   };
 
   // Interactive Adding Forms
@@ -442,13 +485,50 @@ export default function App() {
   }, [user, profile, selectedDate]);
 
   // Load user data from Firestore
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const loadUserData = async (uid: string) => {
     setProfileLoading(true);
     try {
       const prof = await dbService.getUserProfile(uid);
-      setProfile(prof);
+      setMainProfile(prof);
 
-      if (prof) {
+      const subs = await dbService.getSubProfiles(uid);
+      setSubProfiles(subs);
+
+      // Determine active profile
+      let activeProf = prof;
+      const storedActiveId = localStorage.getItem("activeProfileId") || "main";
+      if (storedActiveId !== "main") {
+        const found = subs.find((p) => p.subProfileId === storedActiveId);
+        if (found) {
+          activeProf = found;
+          setActiveProfileId(storedActiveId);
+        } else {
+          setActiveProfileId("main");
+          localStorage.setItem("activeProfileId", "main");
+        }
+      } else {
+        setActiveProfileId("main");
+      }
+
+      setProfile(activeProf);
+
+      if (activeProf) {
+        if (activeProf.mealOrder && activeProf.mealOrder.length > 0) {
+          setMealOrder(activeProf.mealOrder);
+          localStorage.setItem("mealOrder", JSON.stringify(activeProf.mealOrder));
+        }
+        if (activeProf.customNames) {
+          setCustomNames(activeProf.customNames);
+          localStorage.setItem("customNames", JSON.stringify(activeProf.customNames));
+        }
+        
         // Load accompanying history
         const recs = await dbService.getHealthRecords(uid);
         setRecords(recs);
@@ -465,37 +545,41 @@ export default function App() {
           setCompMuscle(recs[0].skeletalMuscleMass || 24.0);
           setCompFatPct(recs[0].bodyFatPercentage || 28.0);
         } else {
-          setCompWeight(prof.currentWeight);
-          setCompMuscle(prof.skeletalMuscleMass || 24.0);
-          setCompFatPct(prof.bodyFatPercentage || 28.0);
+          setCompWeight(activeProf.currentWeight);
+          setCompMuscle(activeProf.skeletalMuscleMass || 24.0);
+          setCompFatPct(activeProf.bodyFatPercentage || 28.0);
         }
 
         // Auto Weekly Calibration Check
-        if (prof.weeklyUpdateEnabled && prof.weeklyUpdateDay !== undefined) {
+        if (activeProf.weeklyUpdateEnabled && activeProf.weeklyUpdateDay !== undefined) {
           const now = new Date();
           // if today is the designated update day AND the last update was more than 1 day ago (to prevent infinite loops or double updates today)
-          const lastUpdate = new Date(prof.updatedAt);
+          const lastUpdate = new Date(activeProf.updatedAt);
           const timeSinceUpdate = now.getTime() - lastUpdate.getTime();
           if (
-            now.getDay() === prof.weeklyUpdateDay &&
+            now.getDay() === activeProf.weeklyUpdateDay &&
             timeSinceUpdate > 24 * 60 * 60 * 1000
           ) {
             // We need to run calibration.
-            const feedback = generateWeeklyFeedback(prof, recs);
+            const feedback = generateWeeklyFeedback(activeProf, recs);
             if (
               feedback &&
-              feedback.recommendedCalories !== prof.targetCalories
+              feedback.recommendedCalories !== activeProf.targetCalories
             ) {
-              // Fire and forget update
-              dbService
-                .saveUserProfile(uid, {
-                  ...prof,
-                  targetCalories: feedback.recommendedCalories,
-                  targetCarbs: feedback.recommendedCarbs,
-                  targetProtein: feedback.recommendedProtein,
-                  targetFat: feedback.recommendedFat,
-                  updatedAt: now.toISOString(),
-                })
+              const updatedPayload = {
+                ...activeProf,
+                targetCalories: feedback.recommendedCalories,
+                targetCarbs: feedback.recommendedCarbs,
+                targetProtein: feedback.recommendedProtein,
+                targetFat: feedback.recommendedFat,
+                updatedAt: now.toISOString(),
+              };
+
+              const savePromise = activeProfileId === "main"
+                ? dbService.saveUserProfile(uid, updatedPayload)
+                : dbService.saveSubProfile(uid, activeProfileId, updatedPayload);
+
+              savePromise
                 .then(() => {
                   setProfile((prev) =>
                     prev
@@ -509,19 +593,21 @@ export default function App() {
                         }
                       : prev,
                   );
-                  alert(
+                  showToast(
                     "주간 자동 칼로리 갱신이 완료되었습니다. (목표 칼로리가 변경되었습니다)",
                   );
                 })
                 .catch(console.error);
             } else if (feedback) {
               // Update the timestamp so it doesn't try again today
-              dbService
-                .saveUserProfile(uid, {
-                  ...prof,
-                  updatedAt: now.toISOString(),
-                })
-                .catch(console.error);
+              const updatedPayload = {
+                ...activeProf,
+                updatedAt: now.toISOString(),
+              };
+              const savePromise = activeProfileId === "main"
+                ? dbService.saveUserProfile(uid, updatedPayload)
+                : dbService.saveSubProfile(uid, activeProfileId, updatedPayload);
+              savePromise.catch(console.error);
             }
           }
         }
@@ -645,23 +731,22 @@ export default function App() {
           const cols = lines[i].split(",");
           if (cols.length <= Math.max(dateIdx, weightIdx)) continue;
 
-          const rawDate = cols[dateIdx];
+          const rawDate = cols[dateIdx]?.trim() || "";
           let loggedAt = new Date().toISOString();
-          if (rawDate.length >= 14) {
-            const yy = rawDate.slice(0, 4);
-            const mm = rawDate.slice(4, 6);
-            const dd = rawDate.slice(6, 8);
-            const hh = rawDate.slice(8, 10);
-            const min = rawDate.slice(10, 12);
-            const ss = rawDate.slice(12, 14);
-            loggedAt = new Date(
-              `${yy}-${mm}-${dd}T${hh}:${min}:${ss}`,
-            ).toISOString();
-          } else if (rawDate.length >= 8) {
-            const yy = rawDate.slice(0, 4);
-            const mm = rawDate.slice(4, 6);
-            const dd = rawDate.slice(6, 8);
-            loggedAt = new Date(`${yy}-${mm}-${dd}T00:00:00`).toISOString();
+          if (rawDate) {
+            const cleaned = rawDate.replace(/[^0-9]/g, "");
+            if (cleaned.length >= 14) {
+              loggedAt = dayjs(cleaned.slice(0, 14), "YYYYMMDDHHmmss").toISOString();
+            } else if (cleaned.length >= 12) {
+              loggedAt = dayjs(cleaned.slice(0, 12), "YYYYMMDDHHmm").toISOString();
+            } else if (cleaned.length >= 8) {
+              loggedAt = dayjs(cleaned.slice(0, 8), "YYYYMMDD").toISOString();
+            } else {
+              const d = dayjs(rawDate);
+              if (d.isValid()) {
+                loggedAt = d.toISOString();
+              }
+            }
           }
 
           const weight = parseFloat(cols[weightIdx]);
@@ -672,6 +757,7 @@ export default function App() {
           if (isNaN(weight)) continue;
 
           newRecords.push({
+            subProfileId: activeProfileId,
             weight,
             skeletalMuscleMass:
               !isNaN(muscle!) && muscle !== undefined ? muscle : undefined,
@@ -691,10 +777,10 @@ export default function App() {
         await Promise.all(promises);
 
         await loadUserData(user.uid);
-        alert(`${newRecords.length}개의 기록이 성공적으로 등록되었습니다.`);
+        showToast(`${newRecords.length}개의 기록이 성공적으로 등록되었습니다.`);
       } catch (err) {
         console.error(err);
-        alert("파일을 처리하는 중 오류가 발생했습니다.");
+        showToast("파일을 처리하는 중 오류가 발생했습니다.");
       } finally {
         setUiLoading(false);
         if (e.target) e.target.value = "";
@@ -710,6 +796,7 @@ export default function App() {
     try {
       const bfm = (compWeight * compFatPct) / 100;
       await dbService.addHealthRecord(user.uid, {
+        subProfileId: activeProfileId,
         weight: compWeight,
         skeletalMuscleMass: compMuscle > 0 ? compMuscle : undefined,
         bodyFatPercentage: compFatPct > 0 ? compFatPct : undefined,
@@ -719,7 +806,7 @@ export default function App() {
 
       // Update current profile weight synchronously as well
       if (profile) {
-        await dbService.saveUserProfile(user.uid, {
+        const updatedProfile = {
           ...profile,
           currentWeight: compWeight,
           skeletalMuscleMass:
@@ -727,7 +814,13 @@ export default function App() {
           bodyFatPercentage:
             compFatPct > 0 ? compFatPct : profile.bodyFatPercentage,
           updatedAt: new Date().toISOString(),
-        });
+        };
+
+        if (activeProfileId === "main") {
+          await dbService.saveUserProfile(user.uid, updatedProfile);
+        } else {
+          await dbService.saveSubProfile(user.uid, activeProfileId, updatedProfile);
+        }
       }
 
       await loadUserData(user.uid);
@@ -802,12 +895,21 @@ export default function App() {
     }
   };
 
+  const handleSelectProfile = async (id: string) => {
+    setActiveProfileId(id);
+    localStorage.setItem("activeProfileId", id);
+    if (user) {
+      await loadUserData(user.uid);
+    }
+  };
+
   const handleApplyRoutine = async (routine: any) => {
     if (!user) return;
     setUiLoading(true);
     try {
       const promises = routine.foods.map((food: any) => {
         const logData = {
+          subProfileId: activeProfileId,
           dateStr: selectedDate,
           mealTime: routine.mealTime,
           name: food.name,
@@ -842,6 +944,7 @@ export default function App() {
       } else if (!logData.mealTime) {
         logData.mealTime = "snack"; // fallback
       }
+      logData.subProfileId = activeProfileId;
       await dbService.addFoodLog(user.uid, logData);
       setActiveMealTime(null);
       await loadDayFoods();
@@ -854,17 +957,20 @@ export default function App() {
     if (!user) return;
     try {
       setUiLoading(true);
+      const promises: Promise<void>[] = [];
       for (const logData of newLogs) {
         if (activeMealTime) logData.mealTime = activeMealTime;
         else if (!logData.mealTime) logData.mealTime = "snack";
-        await dbService.addFoodLog(user.uid, logData);
+        logData.subProfileId = activeProfileId;
+        promises.push(dbService.addFoodLog(user.uid, logData));
       }
       for (const logData of logsToUpdate) {
-        await dbService.updateFoodLog(user.uid, logData.id!, logData);
+        promises.push(dbService.updateFoodLog(user.uid, logData.id!, logData));
       }
       for (const id of logsToDelete) {
-        await dbService.deleteFoodLog(user.uid, id);
+        promises.push(dbService.deleteFoodLog(user.uid, id));
       }
+      await Promise.all(promises);
       setActiveMealTime(null);
       await loadDayFoods();
     } catch (err) {
@@ -957,14 +1063,20 @@ export default function App() {
     if (!user || !profile) return;
     setUiLoading(true);
     try {
-      await dbService.saveUserProfile(user.uid, {
+      const updatedPayload = {
         ...profile,
         targetCalories: recFeedback.recommendedCalories,
         targetCarbs: recFeedback.recommendedCarbs,
         targetProtein: recFeedback.recommendedProtein,
         targetFat: recFeedback.recommendedFat,
         updatedAt: new Date().toISOString(),
-      });
+      };
+
+      if (activeProfileId === "main") {
+        await dbService.saveUserProfile(user.uid, updatedPayload);
+      } else {
+        await dbService.saveSubProfile(user.uid, activeProfileId, updatedPayload);
+      }
       await loadUserData(user.uid);
     } catch (err) {
       console.error(err);
@@ -981,21 +1093,21 @@ export default function App() {
   };
 
   // Pre-calculations for nutrition totals
-  const totalCaloriesLogged = foodLogs.reduce(
+  const totalCaloriesLogged = filteredFoodLogs.reduce(
     (sum, item) => sum + item.calories,
     0,
   );
-  const totalCarbsLogged = foodLogs.reduce((sum, item) => sum + item.carbs, 0);
-  const totalProteinLogged = foodLogs.reduce(
+  const totalCarbsLogged = filteredFoodLogs.reduce((sum, item) => sum + item.carbs, 0);
+  const totalProteinLogged = filteredFoodLogs.reduce(
     (sum, item) => sum + item.protein,
     0,
   );
-  const totalFatLogged = foodLogs.reduce((sum, item) => sum + item.fat, 0);
+  const totalFatLogged = filteredFoodLogs.reduce((sum, item) => sum + item.fat, 0);
 
   // Auto Calculations of Weekly Progress Adjuster
   const weeklyFeedbackResult =
-    profile && records.length >= 2
-      ? generateWeeklyFeedback(profile, records)
+    profile && filteredRecords.length >= 2
+      ? generateWeeklyFeedback(profile, filteredRecords)
       : null;
 
   if (!authReady) {
@@ -1091,8 +1203,38 @@ export default function App() {
     );
   }
 
+  const calendarGrid = useMemo(() => {
+    return Array.from({ length: 42 }).map((_, i) => {
+      const firstDay = new Date(
+        calendarViewDate.getFullYear(),
+        calendarViewDate.getMonth(),
+        1,
+      ).getDay();
+      const daysInMonth = new Date(
+        calendarViewDate.getFullYear(),
+        calendarViewDate.getMonth() + 1,
+        0,
+      ).getDate();
+
+      const dayNum = i - firstDay + 1;
+      const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
+      const dStr = isCurrentMonth
+        ? `${calendarViewDate.getFullYear()}-${String(calendarViewDate.getMonth() + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
+        : "";
+      const isSelected = isCurrentMonth && selectedDate === dStr;
+      const cals = isCurrentMonth ? monthlySummary[dStr] || 0 : 0;
+
+      return { key: i, dayNum, isCurrentMonth, dStr, isSelected, cals };
+    });
+  }, [calendarViewDate, selectedDate, monthlySummary]);
+
   return (
     <div className="min-h-screen bg-slate-150 py-0 md:py-8">
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold animate-in fade-in slide-in-from-top-4">
+          {toastMessage}
+        </div>
+      )}
       {/* Immersive Smartphone container viewport mockup */}
       <div className="max-w-md mx-auto min-h-screen md:min-h-[820px] bg-slate-50 md:rounded-3xl md:shadow-2xl flex flex-col relative pb-20 border border-neutral-200 overflow-hidden">
         {/* Brand App Header */}
@@ -1107,12 +1249,26 @@ export default function App() {
               </h1>
               <div className="flex items-center gap-1 mt-0.5 relative">
                 <select
+                  value={activeProfileId}
+                  onChange={(e) => {
+                    if (e.target.value === "manage") {
+                      setIsProfileManagerOpen(true);
+                    } else {
+                      handleSelectProfile(e.target.value);
+                    }
+                  }}
                   className="bg-[#2563EB] hover:bg-[#1D4ED8] transition-colors text-[10px] text-[#EFF6FF] border border-[#2563EB] outline-none rounded pl-2 pr-5 py-0.5 appearance-none cursor-pointer font-bold"
                   title="프로필 선택"
                 >
                   <option value="main">
-                    {profile?.displayName || user.displayName}
+                    {mainProfile?.displayName || "기본 프로필"}
                   </option>
+                  {subProfiles.map((sub) => (
+                    <option key={sub.subProfileId} value={sub.subProfileId}>
+                      {sub.displayName}
+                    </option>
+                  ))}
+                  <option value="manage">⚙️ 프로필 관리...</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[#EFF6FF]">
                   <ArrowDown className="w-2.5 h-2.5" />
@@ -1270,55 +1426,32 @@ export default function App() {
                         ))}
                       </div>
                       <div className="grid grid-cols-7 gap-1 text-center">
-                        {Array.from({ length: 42 }).map((_, i) => {
-                          const firstDay = new Date(
-                            calendarViewDate.getFullYear(),
-                            calendarViewDate.getMonth(),
-                            1,
-                          ).getDay();
-                          const daysInMonth = new Date(
-                            calendarViewDate.getFullYear(),
-                            calendarViewDate.getMonth() + 1,
-                            0,
-                          ).getDate();
-
-                          const dayNum = i - firstDay + 1;
-                          const isCurrentMonth =
-                            dayNum > 0 && dayNum <= daysInMonth;
-                          const dStr = isCurrentMonth
-                            ? `${calendarViewDate.getFullYear()}-${String(calendarViewDate.getMonth() + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
-                            : "";
-                          const isSelected =
-                            isCurrentMonth && selectedDate === dStr;
-                          const cals = isCurrentMonth
-                            ? monthlySummary[dStr] || 0
-                            : 0;
-
+                        {calendarGrid.map((cell) => {
                           return (
                             <div
-                              key={i}
+                              key={cell.key}
                               className="aspect-square flex items-center justify-center p-0.5"
                             >
-                              {isCurrentMonth && (
+                              {cell.isCurrentMonth && (
                                 <button
                                   onClick={() => {
-                                    setSelectedDate(dStr);
+                                    setSelectedDate(cell.dStr);
                                     setIsCalendarOpen(false);
                                   }}
                                   className={`w-full h-full flex flex-col items-center justify-center rounded-xl transition-colors cursor-pointer ${
-                                    isSelected
+                                    cell.isSelected
                                       ? "bg-[#3B82F6] text-white shadow-sm"
-                                      : cals > 0
+                                      : cell.cals > 0
                                         ? "bg-[#EFF6FF] text-[#1E293B]"
                                         : "bg-transparent text-[#94A3B8] hover:bg-slate-50"
-                                  } ${cals === 0 && !isSelected ? "opacity-40" : ""}`}
+                                  } ${cell.cals === 0 && !cell.isSelected ? "opacity-40" : ""}`}
                                 >
                                   <span className="font-bold text-[11px]">
-                                    {dayNum}
+                                    {cell.dayNum}
                                   </span>
-                                  {cals > 0 && (
+                                  {cell.cals > 0 && (
                                     <span className="text-[7px] font-mono leading-none rounded-full max-w-full text-center mt-0.5">
-                                      {cals}
+                                      {cell.cals}
                                     </span>
                                   )}
                                 </button>
@@ -1451,7 +1584,7 @@ export default function App() {
                     <MealLogger
                       onAddLog={handleAddFoodLog}
                       onMultiSave={handleMultiSave}
-                      existingLogs={foodLogs.filter((log) => log.mealTime === activeMealTime)}
+                      existingLogs={filteredFoodLogs.filter((log) => log.mealTime === activeMealTime)}
                       dateStr={selectedDate}
                       onOpenCopyModal={() => setIsCopyModalOpen(true)}
                       onApplyRoutine={handleApplyRoutine}
@@ -1468,6 +1601,7 @@ export default function App() {
                             const addPromises = foodsToCopy.map((log) =>
                               dbService.addFoodLog(user.uid, {
                                 ...log,
+                                subProfileId: activeProfileId,
                                 mealTime: activeMealTime || log.mealTime,
                                 createdAt: new Date().toISOString(),
                               }),
@@ -1488,13 +1622,7 @@ export default function App() {
                     <Reorder.Group
                       axis="y"
                       values={mealOrder}
-                      onReorder={(newOrder) => {
-                        setMealOrder(newOrder);
-                        localStorage.setItem(
-                          "mealOrder",
-                          JSON.stringify(newOrder),
-                        );
-                      }}
+                      onReorder={handleUpdateMealOrder}
                       className="flex flex-col gap-3 mt-1"
                     >
                       {mealOrder.map((groupKey) => {
@@ -1502,35 +1630,21 @@ export default function App() {
                           <MealGroupItem
                             key={groupKey}
                             groupKey={groupKey}
-                            foodLogs={foodLogs}
+                            foodLogs={filteredFoodLogs}
                             customName={customNames[groupKey]}
                             onRename={(id, newName) => {
                               const newNames = {
                                 ...customNames,
                                 [id]: newName,
                               };
-                              setCustomNames(newNames);
-                              localStorage.setItem(
-                                "customNames",
-                                JSON.stringify(newNames),
-                              );
+                              handleUpdateCustomNames(newNames);
                             }}
                             onDelete={(id) => {
-                              const newOrder = mealOrder.filter(
-                                (k) => k !== id,
-                              );
-                              setMealOrder(newOrder);
-                              localStorage.setItem(
-                                "mealOrder",
-                                JSON.stringify(newOrder),
-                              );
+                              const newOrder = mealOrder.filter((k) => k !== id);
+                              handleUpdateMealOrder(newOrder);
                               const newNames = { ...customNames };
                               delete newNames[id];
-                              setCustomNames(newNames);
-                              localStorage.setItem(
-                                "customNames",
-                                JSON.stringify(newNames),
-                              );
+                              handleUpdateCustomNames(newNames);
                             }}
                             handleDeleteFoodLog={handleDeleteFoodLog}
                             setActiveMealTime={setActiveMealTime}
@@ -1557,11 +1671,7 @@ export default function App() {
                             .length + 1;
                         const newKey = "meal_" + nextMealIdx;
                         const newOrder = [...mealOrder, newKey];
-                        setMealOrder(newOrder);
-                        localStorage.setItem(
-                          "mealOrder",
-                          JSON.stringify(newOrder),
-                        );
+                        handleUpdateMealOrder(newOrder);
                       }}
                       className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all text-[#3B82F6]"
                     >
@@ -1577,11 +1687,7 @@ export default function App() {
                             .length + 1;
                         const newKey = "snack_" + nextSnackIdx;
                         const newOrder = [...mealOrder, newKey];
-                        setMealOrder(newOrder);
-                        localStorage.setItem(
-                          "mealOrder",
-                          JSON.stringify(newOrder),
-                        );
+                        handleUpdateMealOrder(newOrder);
                       }}
                       className="flex-1 h-12 bg-white dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-sm rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#1E293B] dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
                     >
@@ -1593,7 +1699,7 @@ export default function App() {
                   {/* Line Trend Chart Metrics */}
                   {profile && (
                     <div className="mt-2">
-                      <TrendChart records={records} profile={profile} />
+                      <TrendChart records={filteredRecords} profile={profile} />
                     </div>
                   )}
                 </>
@@ -1604,7 +1710,7 @@ export default function App() {
           {/* TAB 3: BODY COMPOSITION MANUAL INSERTS */}
           {activeTab === "composition" && (
             <CompositionTab
-              records={records}
+              records={filteredRecords}
               isAddingComp={isAddingComp}
               setIsAddingComp={setIsAddingComp}
               editingCompId={editingCompId}
@@ -1632,7 +1738,7 @@ export default function App() {
           )}
 
           {/* TAB 6: FASTING TRACKER */}
-          {activeTab === "fasting" && <FastingTracker />}
+          {activeTab === "fasting" && <FastingTracker userId={user ? user.uid : null} />}
 
           {/* TAB 4: MY PROFILE / SETTINGS */}
           {activeTab === "profile" && profile && (
@@ -1643,6 +1749,7 @@ export default function App() {
               setIsEditingProfile={setIsEditingProfile}
               handleSaveProfile={handleSaveProfile}
               uiLoading={uiLoading}
+              onOpenProfileManager={() => setIsProfileManagerOpen(true)}
             />
           )}
         </main>
@@ -1972,13 +2079,14 @@ export default function App() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const char = emojiInput.trim().charAt(0) || "✨";
+                    const trimmed = emojiInput.trim();
+                    const char = trimmed.length > 0 ? [...trimmed][0] : "✨";
                     if (user && emojiLogToEdit.id) {
                       try {
                         await dbService.updateFoodLog(user.uid, emojiLogToEdit.id, {
                           icon: char,
                         });
-                        loadUserData(user.uid);
+                        await loadDayFoods();
                       } catch (err) {
                         console.error(err);
                       }
@@ -1992,6 +2100,20 @@ export default function App() {
                </div>
             </div>
           </div>
+        )}
+
+        {user && isProfileManagerOpen && (
+          <ProfileManagerModal
+            isOpen={isProfileManagerOpen}
+            onClose={() => setIsProfileManagerOpen(false)}
+            userId={user.uid}
+            mainProfile={mainProfile}
+            subProfiles={subProfiles}
+            activeProfileId={activeProfileId}
+            onSelectProfile={handleSelectProfile}
+            onRefreshProfiles={() => loadUserData(user.uid)}
+            showToast={showToast}
+          />
         )}
       </div>
     </div>

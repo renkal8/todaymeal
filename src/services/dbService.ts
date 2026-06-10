@@ -92,6 +92,46 @@ export const dbService = {
     }
   },
 
+  async getSubProfiles(userId: string): Promise<UserProfile[]> {
+    const path = `users/${userId}/subprofiles`;
+    try {
+      const colRef = collection(db, 'users', userId, 'subprofiles');
+      const querySnapshot = await getDocs(colRef);
+      const list: UserProfile[] = [];
+      querySnapshot.forEach((doc) => {
+        list.push({ ...doc.data() as UserProfile, subProfileId: doc.id });
+      });
+      return list;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  },
+
+  async saveSubProfile(userId: string, subProfileId: string, profile: Omit<UserProfile, 'userId'>): Promise<void> {
+    const path = `users/${userId}/subprofiles/${subProfileId}`;
+    try {
+      const docRef = doc(db, 'users', userId, 'subprofiles', subProfileId);
+      const fullProfile: UserProfile = {
+        ...profile,
+        userId,
+        subProfileId,
+      };
+      await setDoc(docRef, fullProfile);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  async deleteSubProfile(userId: string, subProfileId: string): Promise<void> {
+    const path = `users/${userId}/subprofiles/${subProfileId}`;
+    try {
+      const docRef = doc(db, 'users', userId, 'subprofiles', subProfileId);
+      await deleteDoc(docRef);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
   // --- HEALTH RECORDS OPERATIONS (WEIGHTS & BODY COMP) ---
   async addHealthRecord(userId: string, record: Omit<HealthRecord, 'userId'>): Promise<void> {
     const path = `users/${userId}/records`;
