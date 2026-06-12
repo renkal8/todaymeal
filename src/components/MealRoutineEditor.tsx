@@ -477,10 +477,11 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
                                       )}
                                       {result.name}
                                     </p>
-                                    <p className="text-[9px] text-neutral-500 mt-0.5 font-mono">
-                                      {result.serving_desc} • {result.calories}
-                                      kcal • C:{result.carbs}g P:
-                                      {result.protein}g F:{result.fat}g
+                                    <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">
+                                      {result.serving_desc} • {result.calories}kcal
+                                    </p>
+                                    <p className="text-[10px] text-neutral-600 font-bold font-mono mt-0.5">
+                                      탄: {result.carbs}g / 단: {result.protein}g / 지: {result.fat}g
                                     </p>
                                   </button>
                                 ))}
@@ -568,17 +569,20 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
                         key={preset.id}
                         type="button"
                         onClick={() => handleSelectPreset(preset)}
-                        className="flex items-center gap-1.5 p-1.5 bg-white border border-[#E2E8F0] rounded-lg hover:border-[#3B82F6] transition-all text-left truncate cursor-pointer"
+                        className="flex items-start gap-1.5 p-1.5 bg-white border border-[#E2E8F0] rounded-lg hover:border-[#3B82F6] transition-all text-left cursor-pointer"
                       >
-                        <span className="text-sm bg-slate-50 border border-[#E2E8F0] w-6 h-6 flex items-center justify-center rounded">
+                        <span className="text-sm bg-slate-50 border border-[#E2E8F0] w-6 h-6 flex items-center justify-center rounded shrink-0 mt-0.5">
                           {preset.icon}
                         </span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-[10px] font-bold text-neutral-800 truncate">
                             {preset.name}
                           </p>
-                          <p className="text-[8px] text-neutral-500 font-mono">
+                          <p className="text-[9px] text-neutral-500 font-mono leading-tight mt-0.5">
                             {preset.baseGrams}g / {preset.baseCalories}kcal
+                          </p>
+                          <p className="text-[9px] text-neutral-600 font-bold font-mono leading-tight mt-0.5">
+                            탄:{preset.baseCarbs} 단:{preset.baseProtein} 지:{preset.baseFat}
                           </p>
                         </div>
                       </button>

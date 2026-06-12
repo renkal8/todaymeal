@@ -1226,8 +1226,11 @@ export default function MealLogger({
                                 <p className="text-sm font-bold text-neutral-800 truncate w-full">
                                   {result.name}
                                 </p>
-                                <p className="text-[11px] text-neutral-500 font-mono w-full truncate">
-                                  {result.serving_desc} • {result.calories}kcal • 탄: {result.carbs}g • 단: {result.protein}g • 지: {result.fat}g
+                                <p className="text-[11px] text-neutral-500 font-mono w-full">
+                                  {result.serving_desc} • {result.calories}kcal
+                                </p>
+                                <p className="text-[11.5px] text-neutral-700 font-bold font-mono mt-0.5 w-full">
+                                  탄: {result.carbs}g / 단: {result.protein}g / 지: {result.fat}g
                                 </p>
                              </button>
                            ))}
@@ -1264,8 +1267,11 @@ export default function MealLogger({
                                 <p className="text-sm font-bold text-neutral-800 truncate w-full">
                                   {result.name}
                                 </p>
-                                <p className="text-[11px] text-neutral-500 font-mono w-full truncate">
-                                  {result.serving_desc} • {result.calories}kcal • 탄: {result.carbs}g • 단: {result.protein}g • 지: {result.fat}g
+                                <p className="text-[11px] text-neutral-500 font-mono w-full">
+                                  {result.serving_desc} • {result.calories}kcal
+                                </p>
+                                <p className="text-[11.5px] text-neutral-700 font-bold font-mono mt-0.5 w-full">
+                                  탄: {result.carbs}g / 단: {result.protein}g / 지: {result.fat}g
                                 </p>
                              </button>
                            ))}
@@ -1309,7 +1315,10 @@ export default function MealLogger({
                                   {result.name}
                                 </p>
                                 <p className="text-[11px] text-neutral-500 font-mono w-full truncate">
-                                  {result.serving_desc} • {result.calories}kcal • 탄: {result.carbs}g • 단: {result.protein}g • 지: {result.fat}g
+                                  {result.serving_desc} • {result.calories}kcal
+                                 </p>
+                                 <p className="text-[11.5px] text-neutral-700 font-bold font-mono mt-0.5 w-full">
+                                   탄: {result.carbs}g / 단: {result.protein}g / 지: {result.fat}g
                                 </p>
                             </button>
                           ))}
@@ -1502,12 +1511,12 @@ export default function MealLogger({
                   <div
                     key={preset.id}
                     onClick={() => handleSelectPreset(preset)}
-                  className="flex items-center gap-2 p-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl hover:bg-white hover:border-[#3B82F6] hover:shadow-xs cursor-pointer active:scale-98 transition-all justify-between text-left"
+                  className="flex items-start gap-2 p-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl hover:bg-white hover:border-[#3B82F6] hover:shadow-xs cursor-pointer active:scale-98 transition-all justify-between text-left"
                   id={`preset-${preset.id}`}
                 >
-                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                  <div className="min-w-0 flex-1 flex items-start gap-2">
                     <div
-                      className="flex-shrink-0 w-8 h-8 bg-white border border-[#E2E8F0] rounded-lg flex items-center justify-center text-base"
+                      className="flex-shrink-0 w-8 h-8 bg-white border border-[#E2E8F0] rounded-lg flex items-center justify-center text-base mt-0.5"
                       id={`icon-cnt-${preset.id}`}
                     >
                       {preset.icon}
@@ -1519,9 +1528,11 @@ export default function MealLogger({
                       >
                         {preset.name}
                       </p>
-                      <p className="text-[9px] sm:text-[9.5px] text-[#64748B] font-mono leading-none">
-                        {preset.baseGrams}
-                        {preset.servingUnit} · {preset.baseCalories}kcal
+                      <p className="text-[9.5px] sm:text-[10px] text-[#64748B] font-mono leading-tight mt-0.5">
+                        {preset.baseGrams}{preset.servingUnit} · {preset.baseCalories}kcal
+                      </p>
+                      <p className="text-[9.5px] sm:text-[10px] text-[#1E293B] font-bold font-mono leading-tight mt-0.5">
+                        탄:{preset.baseCarbs}g / 단:{preset.baseProtein}g / 지:{preset.baseFat}g
                       </p>
                     </div>
                   </div>
@@ -1597,17 +1608,20 @@ export default function MealLogger({
                                fat: res.fat,
                                carbs: res.carbs,
                             })}
-                            className="flex items-center gap-2 p-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl hover:bg-white hover:border-[#3B82F6] hover:shadow-xs cursor-pointer active:scale-98 transition-all justify-between text-left"
+                            className="flex items-start gap-2 p-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl hover:bg-white hover:border-[#3B82F6] hover:shadow-xs cursor-pointer active:scale-98 transition-all justify-between text-left"
                           >
                              <div className="min-w-0 flex-1">
                                 <p className="text-[10.5px] sm:text-[11px] font-black text-[#1E293B] tracking-tight leading-tight line-clamp-2 mb-0.5">
                                   {res.name}
                                 </p>
-                                <p className="text-[9px] sm:text-[9.5px] text-[#64748B] font-mono leading-none">
-                                  {res.serving_desc} · {res.calories}kcal • 탄:{res.carbs}g 단:{res.protein}g 지:{res.fat}g
+                                <p className="text-[9.5px] sm:text-[10px] text-[#64748B] font-mono leading-tight">
+                                  {res.serving_desc} · {res.calories}kcal
+                                </p>
+                                <p className="text-[9.5px] sm:text-[10px] text-[#1E293B] font-bold font-mono mt-0.5 leading-tight">
+                                  탄:{res.carbs}g / 단:{res.protein}g / 지:{res.fat}g
                                 </p>
                              </div>
-                             <ChevronRight className="w-3.5 h-3.5 text-[#94A3B8] mr-0.5 flex-shrink-0" />
+                             <ChevronRight className="w-3.5 h-3.5 text-[#94A3B8] mr-0.5 mt-1 sm:mt-1.5 flex-shrink-0" />
                           </div>
                        ))}
                     </div>
