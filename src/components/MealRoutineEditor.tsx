@@ -202,9 +202,17 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
       }
       setRoutines(newRoutines); // 저장 성공 후에만 상태 업데이트
       return true;
-    } catch (e) {
+    } catch (e: any) {
       console.error("루틴 저장 실패:", e);
-      setSaveError("저장에 실패했습니다. 다시 시도해주세요.");
+      // If the error message is a FirestoreErrorInfo JSON string, extract the readable error.
+      let readableError = e?.message || String(e);
+      try {
+        const parsed = JSON.parse(readableError);
+        if (parsed && parsed.error) {
+          readableError = parsed.error;
+        }
+      } catch (_) {}
+      setSaveError(`저장 실패: ${readableError}`);
       return false;
     } finally {
       setIsSaving(false);
