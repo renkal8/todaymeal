@@ -188,18 +188,33 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
     setCurrentFat(Math.round(activePreset.baseFat * scale * 10) / 10);
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const saveToCommon = async (newRoutines: MealRoutine[]) => {
-    setRoutines(newRoutines);
-    if (userId) {
-      await dbService.saveMealRoutines(userId, newRoutines);
-    } else {
-      localStorage.setItem("diet_routines", JSON.stringify(newRoutines));
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      if (userId) {
+        await dbService.saveMealRoutines(userId, newRoutines);
+      } else {
+        localStorage.setItem("diet_routines", JSON.stringify(newRoutines));
+      }
+      setRoutines(newRoutines); // 저장 성공 후에만 상태 업데이트
+      return true;
+    } catch (e) {
+      console.error("루틴 저장 실패:", e);
+      setSaveError("저장에 실패했습니다. 다시 시도해주세요.");
+      return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSaveRoutine = () => {
+  const handleSaveRoutine = async () => {
     if (!routineName.trim() || currentFoods.length === 0) return;
     
+    let success = false;
     if (editingRoutineId) {
       const updated = routines.map(r => r.id === editingRoutineId ? {
         ...r,
@@ -207,7 +222,7 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
         mealTime: targetMeal,
         foods: currentFoods,
       } : r);
-      saveToCommon(updated);
+      success = await saveToCommon(updated);
     } else {
       const newRoutine: MealRoutine = {
         id: Date.now().toString(),
@@ -215,13 +230,16 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
         mealTime: targetMeal,
         foods: currentFoods,
       };
-      saveToCommon([...routines, newRoutine]);
+      success = await saveToCommon([...routines, newRoutine]);
     }
-    
-    setIsCreating(false);
-    setEditingRoutineId(null);
-    setRoutineName("");
-    setCurrentFoods([]);
+
+    // 저장 성공 시에만 폼 닫기
+    if (success) {
+      setIsCreating(false);
+      setEditingRoutineId(null);
+      setRoutineName("");
+      setCurrentFoods([]);
+    }
   };
 
   const startEditing = (routine: MealRoutine) => {
@@ -665,25 +683,42 @@ export default function MealRoutineEditor({ userId, onApplyRoutine }: Props) {
               )}
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCreating(false);
-                  setEditingRoutineId(null);
-                }}
-                className="flex-1 h-10 border border-[#E2E8F0] text-[#64748B] font-bold rounded-xl text-xs cursor-pointer hover:bg-slate-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveRoutine}
-                disabled={!routineName.trim() || currentFoods.length === 0}
-                className="flex-1 h-10 bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-55 text-white font-bold rounded-xl text-xs cursor-pointer"
-              >
-                {editingRoutineId ? '루틴 수정완료' : '루틴 생성'}
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreating(false);
+                    setEditingRoutineId(null);
+                  }}
+                  className="flex-1 h-10 border border-[#E2E8F0] text-[#64748B] font-bold rounded-xl text-xs cursor-pointer hover:bg-slate-50"
+                  disabled={isSaving}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRoutine}
+                  disabled={!routineName.trim() || currentFoods.length === 0 || isSaving}
+                  className="flex-1 h-10 bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-55 text-white font-bold rounded-xl text-xs cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      저장 중...
+                    </>
+                  ) : editingRoutineId ? (
+                    "루틴 수정완료"
+                  ) : (
+                    "루틴 생성"
+                  )}
+                </button>
+              </div>
+              {saveError && (
+                <p className="text-[11px] text-red-500 text-center font-bold mt-1">
+                  {saveError}
+                </p>
+              )}
             </div>
           </div>
         ) : (
